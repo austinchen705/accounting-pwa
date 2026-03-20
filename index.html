@@ -129,7 +129,7 @@
         <select id="category" x-model="$store.app.form.categoryId">
           <option value="">Select category…</option>
           <template x-for="cat in $store.app.categories" :key="cat.Id">
-            <option :value="cat.Id" x-text="(cat.Icon || '') + ' ' + cat.Name"></option>
+            <option :value="cat.Id" x-text="$store.app.iconDisplay(cat.Icon) + ' ' + cat.Name"></option>
           </template>
         </select>
         <span class="error" x-text="$store.app.errors.categoryId"></span>
