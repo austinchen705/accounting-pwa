@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Accounts">
+  <title>Personal Accounts</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <link rel="stylesheet" href="./css/app.css">
+</head>
+<body x-data x-init="$store.app.init()">
+
+  <!-- Fatal error overlay -->
+  <div id="fatal-error" style="display:none" class="fatal-overlay">
+    <p>App failed to load.</p>
+    <button onclick="location.reload()">Reload</button>
+  </div>
+
+  <!-- Loading spinner -->
+  <div x-show="$store.app.loading" class="loading-overlay">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- Nav bar -->
+  <header class="nav-bar">
+    <button x-show="$store.app.currentView !== 'transactions'"
+            @click="$store.app.currentView = 'transactions'"
+            class="btn-icon">←</button>
+    <span x-text="
+      $store.app.currentView === 'transactions' ? 'Accounts' :
+      $store.app.currentView === 'form' && !$store.app.editTarget ? 'Add Transaction' :
+      $store.app.currentView === 'form' ? 'Edit Transaction' : 'Settings'
+    "></span>
+    <button x-show="$store.app.currentView === 'transactions'"
+            @click="$store.app.currentView = 'settings'"
+            class="btn-icon">⚙</button>
+  </header>
+
+  <!-- Transaction List View -->
+  <main x-show="$store.app.currentView === 'transactions'">
+    <!-- Month filter -->
+    <div class="month-nav">
+      <button @click="$store.app.prevMonth()" class="btn-icon">‹</button>
+      <span x-text="$store.app.filter.month"></span>
+      <button @click="$store.app.nextMonth()" class="btn-icon">›</button>
+    </div>
+
+    <!-- Type tabs -->
+    <div class="type-tabs">
+      <button @click="$store.app.setTypeFilter('all')"
+              :class="{ active: $store.app.filter.type === 'all' }">All</button>
+      <button @click="$store.app.setTypeFilter('income')"
+              :class="{ active: $store.app.filter.type === 'income' }">Income</button>
+      <button @click="$store.app.setTypeFilter('expense')"
+              :class="{ active: $store.app.filter.type === 'expense' }">Expense</button>
+    </div>
+
+    <!-- Transaction rows -->
+    <ul class="tx-list">
+      <template x-if="$store.app.transactions.length === 0">
+        <li class="empty-state">No transactions this month</li>
+      </template>
+      <template x-for="tx in $store.app.transactions" :key="tx.Id">
+        <li class="tx-row" @click="$store.app.openEdit(tx)">
+          <span class="tx-icon" x-text="$store.app.iconDisplay(tx.CategoryIcon)"></span>
+          <div class="tx-info">
+            <span class="tx-category" x-text="tx.CategoryName || 'Uncategorized'"></span>
+            <span class="tx-note" x-text="tx.Note"></span>
+          </div>
+          <div class="tx-right">
+            <span class="tx-amount"
+                  :class="tx.Type === 'income' ? 'income' : 'expense'"
+                  x-text="(tx.Type === 'income' ? '+' : '-') + Number(tx.Amount).toLocaleString() + ' ' + tx.Currency">
+            </span>
+            <span class="tx-date" x-text="tx.Date?.slice(0, 10)"></span>
+          </div>
+        </li>
+      </template>
+    </ul>
+
+    <!-- FAB -->
+    <button class="fab" @click="$store.app.openAdd()">+</button>
+  </main>
+
+  <!-- Add/Edit Form View -->
+  <main x-show="$store.app.currentView === 'form'">
+    <form @submit.prevent="$store.app.saveTransaction()" class="tx-form">
+
+      <!-- Type -->
+      <div class="form-group">
+        <label>Type</label>
+        <div class="radio-group">
+          <label>
+            <input type="radio" x-model="$store.app.form.type" value="expense"
+                   @change="$store.app.onTypeChange()"> Expense
+          </label>
+          <label>
+            <input type="radio" x-model="$store.app.form.type" value="income"
+                   @change="$store.app.onTypeChange()"> Income
+          </label>
+        </div>
+      </div>
+
+      <!-- Amount -->
+      <div class="form-group">
+        <label for="amount">Amount</label>
+        <input id="amount" type="number" inputmode="decimal" step="0.01" min="0"
+               x-model="$store.app.form.amount" placeholder="0.00">
+        <span class="error" x-text="$store.app.errors.amount"></span>
+      </div>
+
+      <!-- Currency -->
+      <div class="form-group">
+        <label for="currency">Currency</label>
+        <select id="currency" x-model="$store.app.form.currency">
+          <option>TWD</option>
+          <option>USD</option>
+          <option>JPY</option>
+          <option>EUR</option>
+        </select>
+      </div>
+
+      <!-- Category -->
+      <div class="form-group">
+        <label for="category">Category</label>
+        <select id="category" x-model="$store.app.form.categoryId">
+          <option value="">Select category…</option>
+          <template x-for="cat in $store.app.categories" :key="cat.Id">
+            <option :value="cat.Id" x-text="(cat.Icon || '') + ' ' + cat.Name"></option>
+          </template>
+        </select>
+        <span class="error" x-text="$store.app.errors.categoryId"></span>
+      </div>
+
+      <!-- Date -->
+      <div class="form-group">
+        <label for="date">Date</label>
+        <input id="date" type="date" x-model="$store.app.form.date">
+      </div>
+
+      <!-- Note -->
+      <div class="form-group">
+        <label for="note">Note</label>
+        <input id="note" type="text" x-model="$store.app.form.note" placeholder="Optional">
+      </div>
+
+      <button type="submit" class="btn-primary">
+        <span x-text="$store.app.editTarget ? 'Save Changes' : 'Add Transaction'"></span>
+      </button>
+
+      <!-- Delete (edit only) -->
+      <button type="button" x-show="$store.app.editTarget"
+              @click="$store.app.deleteTransaction()"
+              class="btn-danger">Delete</button>
+    </form>
+  </main>
+
+  <!-- Settings View -->
+  <main x-show="$store.app.currentView === 'settings'">
+    <div class="settings-panel">
+      <div class="drive-status">
+        <span x-text="
+          $store.app.driveStatus === 'connected' ? '🟢 Google Drive connected' :
+          $store.app.driveStatus === 'syncing'   ? '🔄 Syncing…' :
+                                                   '⚪ Not connected'
+        "></span>
+      </div>
+
+      <button x-show="$store.app.driveStatus === 'disconnected'"
+              @click="$store.app.connectDrive()"
+              class="btn-primary">Connect Google Drive</button>
+
+      <button x-show="$store.app.driveStatus !== 'disconnected'"
+              @click="$store.app.backupToDrive()"
+              :disabled="$store.app.driveStatus === 'syncing'"
+              class="btn-primary">Backup to Drive</button>
+
+      <button x-show="$store.app.driveStatus !== 'disconnected'"
+              @click="$store.app.restoreFromDrive()"
+              :disabled="$store.app.driveStatus === 'syncing'"
+              class="btn-secondary">Restore from Drive</button>
+
+      <button x-show="$store.app.driveStatus !== 'disconnected'"
+              @click="$store.app.disconnectDrive()"
+              class="btn-ghost">Disconnect</button>
+    </div>
+  </main>
+
+  <!-- Toast -->
+  <div x-show="$store.app.toast.visible"
+       x-transition
+       class="toast"
+       x-text="$store.app.toast.message">
+  </div>
+
+  <script src="./config.js"></script>
+  <script src="./vendor/sql-wasm.js"></script>
+  <script src="./vendor/alpine.min.js" defer></script>
+  <script src="./db.js"></script>
+  <script src="./drive.js"></script>
+  <script src="./app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js');
+    }
+  </script>
+</body>
+</html>
