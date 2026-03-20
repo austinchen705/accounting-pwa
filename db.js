@@ -148,10 +148,14 @@ function getTransactions(yearMonth, typeFilter) {
   );
 }
 
+// Convert 'YYYY-MM-DD' to .NET ticks via SQLite julianday (avoids JS precision loss)
+const DATE_TO_TICKS_EXPR =
+  `CAST(621355968000000000 + (julianday(?) - 2440587.5) * 864000000000 AS INTEGER)`;
+
 async function addTransaction({ amount, currency, categoryId, date, note, type }) {
   db.run(
     `INSERT INTO Transactions (Amount, Currency, CategoryId, Date, Note, Type)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ${DATE_TO_TICKS_EXPR}, ?, ?)`,
     [amount, currency, categoryId, date, note, type]
   );
   await exportAndPersist();
@@ -159,7 +163,7 @@ async function addTransaction({ amount, currency, categoryId, date, note, type }
 
 async function updateTransaction(id, { amount, currency, categoryId, date, note, type }) {
   db.run(
-    `UPDATE Transactions SET Amount=?, Currency=?, CategoryId=?, Date=?, Note=?, Type=?
+    `UPDATE Transactions SET Amount=?, Currency=?, CategoryId=?, Date=${DATE_TO_TICKS_EXPR}, Note=?, Type=?
      WHERE Id=?`,
     [amount, currency, categoryId, date, note, type, id]
   );
