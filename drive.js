@@ -1,7 +1,17 @@
 // drive.js — Google Drive OAuth2 PKCE + backup/restore
 // ⚠️  Set these before deploying
-const CLIENT_ID = window.DRIVE_CONFIG?.clientId || '';
-const CLIENT_SECRET = window.DRIVE_CONFIG?.clientSecret || '';
+function getConfig() {
+  try { return JSON.parse(localStorage.getItem('drive_config') || '{}'); } catch { return {}; }
+}
+function getClientId()     { return getConfig().clientId     || window.DRIVE_CONFIG?.clientId     || ''; }
+function getClientSecret() { return getConfig().clientSecret || window.DRIVE_CONFIG?.clientSecret || ''; }
+function saveConfig(clientId, clientSecret) {
+  localStorage.setItem('drive_config', JSON.stringify({ clientId, clientSecret }));
+}
+function isConfigured() {
+  return !!(getClientId() && getClientSecret());
+}
+
 const REDIRECT_URI = window.location.origin + window.location.pathname;
 
 const AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
@@ -39,7 +49,7 @@ async function startOAuthFlow() {
   sessionStorage.setItem('pkce_state', state);
 
   const params = new URLSearchParams({
-    client_id: CLIENT_ID,
+    client_id: getClientId(),
     redirect_uri: REDIRECT_URI,
     response_type: 'code',
     scope: DRIVE_SCOPE,
@@ -64,8 +74,8 @@ async function handleOAuthCallback(code, state) {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       code,
-      client_id: CLIENT_ID,
-      client_secret: CLIENT_SECRET,
+      client_id: getClientId(),
+      client_secret: getClientSecret(),
       redirect_uri: REDIRECT_URI,
       grant_type: 'authorization_code',
       code_verifier: verifier,
@@ -105,8 +115,8 @@ async function refreshAccessToken() {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      client_id: CLIENT_ID,
-      client_secret: CLIENT_SECRET,
+      client_id: getClientId(),
+      client_secret: getClientSecret(),
       grant_type: 'refresh_token',
       refresh_token: stored.refresh_token,
     }),
@@ -221,4 +231,6 @@ window.Drive = {
   clearTokens,
   backup,
   restore,
+  saveConfig,
+  isConfigured,
 };

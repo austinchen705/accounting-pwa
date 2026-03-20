@@ -161,6 +161,20 @@
   <!-- Settings View -->
   <main x-show="$store.app.currentView === 'settings'">
     <div class="settings-panel">
+
+      <!-- Credentials setup -->
+      <div class="form-group">
+        <label for="cfg-id">Google Client ID</label>
+        <input id="cfg-id" type="text" x-model="$store.app.setup.clientId" placeholder="…apps.googleusercontent.com">
+      </div>
+      <div class="form-group">
+        <label for="cfg-secret">Client Secret</label>
+        <input id="cfg-secret" type="password" x-model="$store.app.setup.clientSecret" placeholder="GOCSPX-…">
+      </div>
+      <button @click="$store.app.saveSetup()" class="btn-secondary">Save Credentials</button>
+
+      <hr style="border:none;border-top:1px solid var(--border)">
+
       <div class="drive-status">
         <span x-text="
           $store.app.driveStatus === 'connected' ? '🟢 Google Drive connected' :

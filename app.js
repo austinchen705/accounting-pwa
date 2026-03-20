@@ -14,6 +14,7 @@ document.addEventListener('alpine:init', () => {
     toast: { message: '', visible: false, _timer: null },
     loading: false,
     driveStatus: 'disconnected', // 'disconnected' | 'connected' | 'syncing'
+    setup: { clientId: '', clientSecret: '' },
     form: { amount: '', currency: 'TWD', categoryId: '', date: '', note: '', type: 'expense' },
     errors: {},
 
@@ -174,7 +175,20 @@ document.addEventListener('alpine:init', () => {
       }
     },
 
+    saveSetup() {
+      if (!this.setup.clientId || !this.setup.clientSecret) {
+        this.showToast('Please enter both Client ID and Client Secret.');
+        return;
+      }
+      Drive.saveConfig(this.setup.clientId.trim(), this.setup.clientSecret.trim());
+      this.showToast('Credentials saved.');
+    },
+
     connectDrive() {
+      if (!Drive.isConfigured()) {
+        this.showToast('Please save your credentials first.');
+        return;
+      }
       Drive.startOAuthFlow();
     },
 
