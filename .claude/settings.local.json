@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(openspec status:*)",
+      "Bash(openspec instructions:*)",
+      "Bash(dotnet:*)",
+      "Bash(ls:*)",
+      "Bash(pip --version)",
+      "Bash(openspec new:*)",
+      "Bash(git check-ignore:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git worktree:*)"
+    ]
+  }
+}
