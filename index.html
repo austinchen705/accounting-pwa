@@ -203,6 +203,11 @@
       <button x-show="$store.app.driveStatus !== 'disconnected'"
               @click="$store.app.disconnectDrive()"
               class="btn-ghost">Disconnect</button>
+
+      <hr style="border:none;border-top:1px solid var(--border)">
+
+      <button @click="$store.app.resetServiceWorker()"
+              class="btn-ghost">Reset Service Worker (force refresh)</button>
     </div>
   </main>
 

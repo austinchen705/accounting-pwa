@@ -168,12 +168,7 @@ document.addEventListener('alpine:init', () => {
       if (!_chart && canvas.offsetWidth === 0) {
         setTimeout(() => {
           const c = document.getElementById('asset-trend-chart');
-          if (c && c.offsetWidth > 0) {
-            this.renderChart();
-            this.showToast('chart: rendered on retry');
-          } else {
-            this.showToast('chart: retry failed (still 0×0)');
-          }
+          if (c && c.offsetWidth > 0) this.renderChart();
         }, 100);
         return;
       }
@@ -387,6 +382,20 @@ document.addEventListener('alpine:init', () => {
     disconnectDrive() {
       Drive.clearTokens();
       this.driveStatus = 'disconnected';
+    },
+
+    async resetServiceWorker() {
+      if (!confirm('解除註冊 service worker 並清掉快取？\n(本機資料不受影響，但下次開啟會重新下載所有檔案)')) return;
+      try {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+        this.showToast('SW unregistered. Reloading in 2s...');
+        setTimeout(() => location.reload(), 2000);
+      } catch (e) {
+        this.showToast('Reset failed: ' + (e.message || 'unknown'));
+      }
     },
 
     iconDisplay(icon) {
