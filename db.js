@@ -69,6 +69,21 @@ async function runMigrations() {
     `);
     db.run(`INSERT INTO _migrations VALUES (1)`);
   }
+
+  if (!versions.includes(2)) {
+    db.run(`
+      CREATE TABLE IF NOT EXISTS AssetSnapshot (
+        Id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        Date        INTEGER NOT NULL,
+        Stock       REAL NOT NULL DEFAULT 0,
+        Cash        REAL NOT NULL DEFAULT 0,
+        FirstTrade  REAL NOT NULL DEFAULT 0,
+        Property    REAL NOT NULL DEFAULT 0
+      )
+    `);
+    db.run(`CREATE INDEX IF NOT EXISTS IX_AssetSnapshots_Date ON AssetSnapshot(Date)`);
+    db.run(`INSERT INTO _migrations VALUES (2)`);
+  }
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -85,8 +100,8 @@ async function initDB() {
     db = new SQL.Database(bytes);
   } else {
     db = new SQL.Database();
-    await runMigrations();
   }
+  await runMigrations();
 }
 
 // ── Persist ───────────────────────────────────────────────────────────────────
@@ -178,6 +193,7 @@ async function deleteTransaction(id) {
 async function loadFromBytes(bytes) {
   db.close();
   db = new SQL.Database(bytes);
+  await runMigrations();
   await exportAndPersist();
 }
 
