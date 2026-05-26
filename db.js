@@ -69,6 +69,21 @@ async function runMigrations() {
     `);
     db.run(`INSERT INTO _migrations VALUES (1)`);
   }
+
+  if (!versions.includes(2)) {
+    db.run(`
+      CREATE TABLE IF NOT EXISTS AssetSnapshot (
+        Id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        Date        INTEGER NOT NULL,
+        Stock       REAL NOT NULL DEFAULT 0,
+        Cash        REAL NOT NULL DEFAULT 0,
+        FirstTrade  REAL NOT NULL DEFAULT 0,
+        Property    REAL NOT NULL DEFAULT 0
+      )
+    `);
+    db.run(`CREATE INDEX IF NOT EXISTS IX_AssetSnapshots_Date ON AssetSnapshot(Date)`);
+    db.run(`INSERT INTO _migrations VALUES (2)`);
+  }
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -85,8 +100,8 @@ async function initDB() {
     db = new SQL.Database(bytes);
   } else {
     db = new SQL.Database();
-    await runMigrations();
   }
+  await runMigrations();
 }
 
 // ── Persist ───────────────────────────────────────────────────────────────────
@@ -175,9 +190,68 @@ async function deleteTransaction(id) {
   await exportAndPersist();
 }
 
+function getSnapshots() {
+  const results = db.exec(`
+    SELECT s.Id,
+           date(datetime((s.Date - 621355968000000000) / 10000000, 'unixepoch')) AS Date,
+           s.Stock, s.Cash, s.FirstTrade, s.Property
+    FROM AssetSnapshot s
+    ORDER BY s.Date DESC
+  `);
+  if (!results.length) return [];
+  const cols = results[0].columns;
+  return results[0].values.map(row =>
+    Object.fromEntries(cols.map((c, i) => [c, row[i]]))
+  );
+}
+
+async function addOrReplaceSnapshotByDate({ date, stock, cash, firstTrade, property }) {
+  // 查同日最大 Id 那一筆
+  const existing = db.exec(
+    `SELECT Id FROM AssetSnapshot WHERE Date = ${DATE_TO_TICKS_EXPR} ORDER BY Id DESC LIMIT 1`,
+    [date]
+  );
+
+  if (existing.length && existing[0].values.length) {
+    const id = existing[0].values[0][0];
+    db.run(
+      `UPDATE AssetSnapshot
+       SET Stock=?, Cash=?, FirstTrade=?, Property=?
+       WHERE Id=?`,
+      [stock, cash, firstTrade, property, id]
+    );
+    await exportAndPersist();
+    return { action: 'updated', id };
+  }
+
+  db.run(
+    `INSERT INTO AssetSnapshot (Date, Stock, Cash, FirstTrade, Property)
+     VALUES (${DATE_TO_TICKS_EXPR}, ?, ?, ?, ?)`,
+    [date, stock, cash, firstTrade, property]
+  );
+  await exportAndPersist();
+  return { action: 'inserted' };
+}
+
+async function updateSnapshot(id, { date, stock, cash, firstTrade, property }) {
+  db.run(
+    `UPDATE AssetSnapshot
+     SET Date=${DATE_TO_TICKS_EXPR}, Stock=?, Cash=?, FirstTrade=?, Property=?
+     WHERE Id=?`,
+    [date, stock, cash, firstTrade, property, id]
+  );
+  await exportAndPersist();
+}
+
+async function deleteSnapshot(id) {
+  db.run(`DELETE FROM AssetSnapshot WHERE Id=?`, [id]);
+  await exportAndPersist();
+}
+
 async function loadFromBytes(bytes) {
   db.close();
   db = new SQL.Database(bytes);
+  await runMigrations();
   await exportAndPersist();
 }
 
@@ -191,6 +265,10 @@ window.DB = {
   updateTransaction,
   deleteTransaction,
   loadFromBytes,
+  getSnapshots,
+  addOrReplaceSnapshotByDate,
+  updateSnapshot,
+  deleteSnapshot,
 };
 
 window._dbExportBytes = () => db.export();

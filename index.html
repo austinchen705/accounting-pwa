@@ -27,14 +27,17 @@
   <!-- Nav bar -->
   <header class="nav-bar">
     <button x-show="$store.app.currentView !== 'transactions'"
-            @click="$store.app.currentView = 'transactions'"
+            @click="$store.app.currentView = ($store.app.currentView === 'snapshotForm' ? 'trends' : 'transactions')"
             class="btn-icon">←</button>
     <span x-text="
       $store.app.currentView === 'transactions' ? 'Accounts' :
+      $store.app.currentView === 'trends' ? '資產趨勢' :
+      $store.app.currentView === 'snapshotForm' && !$store.app.snapshotEditTarget ? '新增資產快照' :
+      $store.app.currentView === 'snapshotForm' ? '編輯資產快照' :
       $store.app.currentView === 'form' && !$store.app.editTarget ? 'Add Transaction' :
       $store.app.currentView === 'form' ? 'Edit Transaction' : 'Settings'
     "></span>
-    <button x-show="$store.app.currentView === 'transactions'"
+    <button x-show="['transactions','trends'].includes($store.app.currentView)"
             @click="$store.app.currentView = 'settings'"
             class="btn-icon">⚙</button>
   </header>
@@ -203,6 +206,123 @@
     </div>
   </main>
 
+  <!-- Asset Trend View -->
+  <main x-show="$store.app.currentView === 'trends'">
+
+    <!-- Latest total -->
+    <template x-if="$store.app.snapshots.length > 0">
+      <div class="latest-total">
+        <div class="latest-total-caption"
+             x-text="'最新總資產 (' + $store.app.snapshots[0].Date.replace(/-/g,'/') + ')'"></div>
+        <div class="latest-total-amount"
+             x-text="(($store.app.snapshots[0].Stock + $store.app.snapshots[0].Cash + $store.app.snapshots[0].FirstTrade + $store.app.snapshots[0].Property)|0).toLocaleString()"></div>
+      </div>
+    </template>
+
+    <!-- Chart -->
+    <div class="chart-container" x-show="$store.app.snapshots.length > 0">
+      <canvas id="asset-trend-chart"></canvas>
+    </div>
+
+    <!-- Snapshot history -->
+    <h3 class="section-title" x-show="$store.app.snapshots.length > 0">快照歷史</h3>
+
+    <ul class="snapshot-list">
+      <template x-if="$store.app.snapshots.length === 0">
+        <li class="empty-state">尚無資產快照資料</li>
+      </template>
+      <template x-for="s in $store.app.snapshots" :key="s.Id">
+        <li class="snapshot-card" @click="$store.app.openSnapshotEdit(s)">
+          <div class="snapshot-date" x-text="s.Date.replace(/-/g,'/')"></div>
+          <div class="snapshot-grid">
+            <div class="snapshot-cell">
+              <span class="snapshot-label">Stock</span>
+              <span class="snapshot-value" x-text="(s.Stock|0).toLocaleString()"></span>
+            </div>
+            <div class="snapshot-cell">
+              <span class="snapshot-label">Cash</span>
+              <span class="snapshot-value" x-text="(s.Cash|0).toLocaleString()"></span>
+            </div>
+            <div class="snapshot-cell">
+              <span class="snapshot-label">FirstTrade</span>
+              <span class="snapshot-value" x-text="(s.FirstTrade|0).toLocaleString()"></span>
+            </div>
+            <div class="snapshot-cell">
+              <span class="snapshot-label">Property(房產)</span>
+              <span class="snapshot-value" x-text="(s.Property|0).toLocaleString()"></span>
+            </div>
+          </div>
+        </li>
+      </template>
+    </ul>
+
+    <!-- FAB -->
+    <button class="fab" @click="$store.app.openSnapshotAdd()">+</button>
+  </main>
+
+  <!-- Snapshot Form View -->
+  <main x-show="$store.app.currentView === 'snapshotForm'">
+    <form @submit.prevent="$store.app.saveSnapshot()" class="tx-form">
+
+      <div class="form-group">
+        <label for="snap-date">日期</label>
+        <input id="snap-date" type="date" x-model="$store.app.snapshotForm.date">
+        <span class="error" x-text="$store.app.snapshotErrors.date"></span>
+      </div>
+
+      <div class="form-group">
+        <label for="snap-stock">Stock</label>
+        <input id="snap-stock" type="number" inputmode="numeric" step="1" min="0"
+               x-model="$store.app.snapshotForm.stock" placeholder="0">
+        <span class="error" x-text="$store.app.snapshotErrors.stock"></span>
+      </div>
+
+      <div class="form-group">
+        <label for="snap-cash">Cash</label>
+        <input id="snap-cash" type="number" inputmode="numeric" step="1" min="0"
+               x-model="$store.app.snapshotForm.cash" placeholder="0">
+        <span class="error" x-text="$store.app.snapshotErrors.cash"></span>
+      </div>
+
+      <div class="form-group">
+        <label for="snap-first-trade">FirstTrade</label>
+        <input id="snap-first-trade" type="number" inputmode="numeric" step="1" min="0"
+               x-model="$store.app.snapshotForm.firstTrade" placeholder="0">
+        <span class="error" x-text="$store.app.snapshotErrors.firstTrade"></span>
+      </div>
+
+      <div class="form-group">
+        <label for="snap-property">Property(房產)</label>
+        <input id="snap-property" type="number" inputmode="numeric" step="1" min="0"
+               x-model="$store.app.snapshotForm.property" placeholder="0">
+        <span class="error" x-text="$store.app.snapshotErrors.property"></span>
+      </div>
+
+      <button type="submit" class="btn-primary">
+        <span x-text="$store.app.snapshotEditTarget ? '更新快照' : '新增快照'"></span>
+      </button>
+
+      <button type="button"
+              x-show="$store.app.snapshotEditTarget"
+              @click="$store.app.deleteSnapshot()"
+              class="btn-danger">刪除</button>
+    </form>
+  </main>
+
+  <!-- Bottom tab bar -->
+  <nav class="tab-bar" x-show="['transactions','trends'].includes($store.app.currentView)">
+    <button :class="{ active: $store.app.currentView === 'transactions' }"
+            @click="$store.app.currentView = 'transactions'">
+      <span class="tab-icon">📒</span>
+      <span class="tab-label">Transactions</span>
+    </button>
+    <button :class="{ active: $store.app.currentView === 'trends' }"
+            @click="$store.app.currentView = 'trends'; $store.app.loadSnapshots()">
+      <span class="tab-icon">📈</span>
+      <span class="tab-label">Trends</span>
+    </button>
+  </nav>
+
   <!-- Toast -->
   <div x-show="$store.app.toast.visible"
        x-transition
@@ -211,6 +331,7 @@
   </div>
 
   <script src="./vendor/sql-wasm.js"></script>
+  <script src="./vendor/chart.umd.min.js"></script>
   <script src="./vendor/alpine.min.js" defer></script>
   <script src="./db.js"></script>
   <script src="./drive.js"></script>
