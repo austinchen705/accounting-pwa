@@ -164,7 +164,14 @@ document.addEventListener('alpine:init', () => {
       }
       // canvas 在 display:none 容器內時 offsetWidth = 0；此時不建 chart instance
       // 避免 Chart.js 建出 0×0 的圖、之後切到 trends 不會自動 resize
-      if (!_chart && canvas.offsetWidth === 0) return;
+      // 若 Alpine x-show 還沒 propagate 完（iOS Safari 偶有時序差），延 100ms 再試一次
+      if (!_chart && canvas.offsetWidth === 0) {
+        setTimeout(() => {
+          const c = document.getElementById('asset-trend-chart');
+          if (c && c.offsetWidth > 0) this.renderChart();
+        }, 100);
+        return;
+      }
 
       // 依日期升序排列以畫圖
       const asc = [...this.snapshots].sort((a, b) => a.Date.localeCompare(b.Date));
