@@ -340,6 +340,7 @@ document.addEventListener('alpine:init', () => {
         const bytes = await Drive.restore();
         await DB.loadFromBytes(bytes);
         await this.loadTransactions();
+        this.loadSnapshots();
         this.showToast('Restore complete');
         this.driveStatus = 'connected';
       } catch (e) {

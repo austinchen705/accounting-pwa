@@ -27,7 +27,7 @@
   <!-- Nav bar -->
   <header class="nav-bar">
     <button x-show="$store.app.currentView !== 'transactions'"
-            @click="$store.app.currentView = 'transactions'"
+            @click="$store.app.currentView = ($store.app.currentView === 'snapshotForm' ? 'trends' : 'transactions')"
             class="btn-icon">←</button>
     <span x-text="
       $store.app.currentView === 'transactions' ? 'Accounts' :
