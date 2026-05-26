@@ -4,6 +4,8 @@ function currentMonth() {
   return new Date().toISOString().slice(0, 7); // 'YYYY-MM'
 }
 
+let _chart = null;
+
 document.addEventListener('alpine:init', () => {
   Alpine.store('app', {
     currentView: 'transactions',
@@ -65,6 +67,8 @@ document.addEventListener('alpine:init', () => {
 
     loadSnapshots() {
       this.snapshots = DB.getSnapshots();
+      // canvas 可能還沒 mount，延後一拍
+      requestAnimationFrame(() => this.renderChart());
     },
 
     openSnapshotAdd() {
@@ -149,6 +153,80 @@ document.addEventListener('alpine:init', () => {
       } catch (e) {
         this.showToast('刪除失敗：' + (e.message || 'unknown'));
       }
+    },
+
+    renderChart() {
+      const canvas = document.getElementById('asset-trend-chart');
+      if (!canvas) return; // trends view 還沒在 DOM
+      if (!this.snapshots.length) {
+        if (_chart) { _chart.destroy(); _chart = null; }
+        return;
+      }
+      // canvas 在 display:none 容器內時 offsetWidth = 0；此時不建 chart instance
+      // 避免 Chart.js 建出 0×0 的圖、之後切到 trends 不會自動 resize
+      if (!_chart && canvas.offsetWidth === 0) return;
+
+      // 依日期升序排列以畫圖
+      const asc = [...this.snapshots].sort((a, b) => a.Date.localeCompare(b.Date));
+      const labels = this.buildCondensedLabels(asc.map(s => s.Date));
+      const stock = asc.map(s => s.Stock);
+      const cash = asc.map(s => s.Cash);
+      const firstTrade = asc.map(s => s.FirstTrade);
+      const property = asc.map(s => s.Property);
+      const total = asc.map((s, i) => stock[i] + cash[i] + firstTrade[i] + property[i]);
+
+      const datasets = [
+        { type: 'bar', label: 'Stock',      data: stock,      backgroundColor: '#2563EB', stack: 'a' },
+        { type: 'bar', label: 'Cash',       data: cash,       backgroundColor: '#16A34A', stack: 'a' },
+        { type: 'bar', label: 'FirstTrade', data: firstTrade, backgroundColor: '#EA580C', stack: 'a' },
+        { type: 'bar', label: 'Property(房產)', data: property, backgroundColor: '#7C3AED', stack: 'a' },
+        {
+          type: 'line', label: 'Total', data: total,
+          borderColor: '#111827', backgroundColor: '#111827',
+          borderWidth: 3, pointRadius: 4, pointHoverRadius: 6, fill: false, tension: 0,
+        },
+      ];
+
+      if (_chart) {
+        _chart.data.labels = labels;
+        _chart.data.datasets = datasets;
+        _chart.update();
+        return;
+      }
+
+      _chart = new Chart(canvas, {
+        data: { labels, datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'bottom' },
+          },
+          scales: {
+            x: { stacked: true },
+            y: {
+              stacked: true,
+              beginAtZero: true,
+              ticks: {
+                callback: v => Number(v).toLocaleString(),
+              },
+            },
+          },
+        },
+      });
+    },
+
+    // 仿 MAUI BuildCondensedDateLabels：snapshots 多時降採樣 label
+    buildCondensedLabels(isoDates) {
+      const toShort = iso => {
+        const [, m, d] = iso.split('-');
+        return `${m}/${d}`;
+      };
+      if (isoDates.length <= 6) return isoDates.map(toShort);
+      const step = isoDates.length <= 12 ? 2 : isoDates.length <= 24 ? 3 : 5;
+      return isoDates.map((iso, i) =>
+        (i === isoDates.length - 1 || i % step === 0) ? toShort(iso) : ''
+      );
     },
 
     prevMonth() {
