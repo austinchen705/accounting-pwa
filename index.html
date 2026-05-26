@@ -260,6 +260,55 @@
     <button class="fab" @click="$store.app.openSnapshotAdd()">+</button>
   </main>
 
+  <!-- Snapshot Form View -->
+  <main x-show="$store.app.currentView === 'snapshotForm'">
+    <form @submit.prevent="$store.app.saveSnapshot()" class="tx-form">
+
+      <div class="form-group">
+        <label for="snap-date">日期</label>
+        <input id="snap-date" type="date" x-model="$store.app.snapshotForm.date">
+        <span class="error" x-text="$store.app.snapshotErrors.date"></span>
+      </div>
+
+      <div class="form-group">
+        <label for="snap-stock">Stock</label>
+        <input id="snap-stock" type="number" inputmode="numeric" step="1" min="0"
+               x-model="$store.app.snapshotForm.stock" placeholder="0">
+        <span class="error" x-text="$store.app.snapshotErrors.stock"></span>
+      </div>
+
+      <div class="form-group">
+        <label for="snap-cash">Cash</label>
+        <input id="snap-cash" type="number" inputmode="numeric" step="1" min="0"
+               x-model="$store.app.snapshotForm.cash" placeholder="0">
+        <span class="error" x-text="$store.app.snapshotErrors.cash"></span>
+      </div>
+
+      <div class="form-group">
+        <label for="snap-first-trade">FirstTrade</label>
+        <input id="snap-first-trade" type="number" inputmode="numeric" step="1" min="0"
+               x-model="$store.app.snapshotForm.firstTrade" placeholder="0">
+        <span class="error" x-text="$store.app.snapshotErrors.firstTrade"></span>
+      </div>
+
+      <div class="form-group">
+        <label for="snap-property">Property(房產)</label>
+        <input id="snap-property" type="number" inputmode="numeric" step="1" min="0"
+               x-model="$store.app.snapshotForm.property" placeholder="0">
+        <span class="error" x-text="$store.app.snapshotErrors.property"></span>
+      </div>
+
+      <button type="submit" class="btn-primary">
+        <span x-text="$store.app.snapshotEditTarget ? '更新快照' : '新增快照'"></span>
+      </button>
+
+      <button type="button"
+              x-show="$store.app.snapshotEditTarget"
+              @click="$store.app.deleteSnapshot()"
+              class="btn-danger">刪除</button>
+    </form>
+  </main>
+
   <!-- Bottom tab bar -->
   <nav class="tab-bar" x-show="['transactions','trends'].includes($store.app.currentView)">
     <button :class="{ active: $store.app.currentView === 'transactions' }"

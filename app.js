@@ -90,6 +90,67 @@ document.addEventListener('alpine:init', () => {
       this.currentView = 'snapshotForm';
     },
 
+    validateSnapshotForm() {
+      this.snapshotErrors = {};
+      if (!this.snapshotForm.date) {
+        this.snapshotErrors.date = '日期必填';
+      }
+      for (const field of ['stock', 'cash', 'firstTrade', 'property']) {
+        const raw = this.snapshotForm[field];
+        if (raw === '' || raw === null || raw === undefined) continue;
+        const num = parseFloat(raw);
+        if (Number.isNaN(num) || num < 0) {
+          this.snapshotErrors[field] = '資產值必須為非負數';
+        }
+      }
+      return Object.keys(this.snapshotErrors).length === 0;
+    },
+
+    parseSnapshotValue(raw) {
+      if (raw === '' || raw === null || raw === undefined) return 0;
+      const n = parseFloat(raw);
+      return Number.isNaN(n) ? 0 : n;
+    },
+
+    async saveSnapshot() {
+      if (!this.validateSnapshotForm()) return;
+
+      const payload = {
+        date: this.snapshotForm.date,
+        stock: this.parseSnapshotValue(this.snapshotForm.stock),
+        cash: this.parseSnapshotValue(this.snapshotForm.cash),
+        firstTrade: this.parseSnapshotValue(this.snapshotForm.firstTrade),
+        property: this.parseSnapshotValue(this.snapshotForm.property),
+      };
+
+      try {
+        if (this.snapshotEditTarget) {
+          await DB.updateSnapshot(this.snapshotEditTarget.Id, payload);
+        } else {
+          const result = await DB.addOrReplaceSnapshotByDate(payload);
+          if (result.action === 'updated') {
+            this.showToast(`已取代 ${payload.date.replace(/-/g,'/')} 當日資料`);
+          }
+        }
+        this.loadSnapshots();
+        this.currentView = 'trends';
+      } catch (e) {
+        this.showToast('儲存失敗：' + (e.message || 'unknown'));
+      }
+    },
+
+    async deleteSnapshot() {
+      if (!this.snapshotEditTarget) return;
+      if (!confirm('刪除此資產快照？')) return;
+      try {
+        await DB.deleteSnapshot(this.snapshotEditTarget.Id);
+        this.loadSnapshots();
+        this.currentView = 'trends';
+      } catch (e) {
+        this.showToast('刪除失敗：' + (e.message || 'unknown'));
+      }
+    },
+
     prevMonth() {
       const [y, m] = this.filter.month.split('-').map(Number);
       const d = new Date(y, m - 2, 1);
