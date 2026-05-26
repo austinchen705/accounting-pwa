@@ -31,10 +31,13 @@
             class="btn-icon">←</button>
     <span x-text="
       $store.app.currentView === 'transactions' ? 'Accounts' :
+      $store.app.currentView === 'trends' ? '資產趨勢' :
+      $store.app.currentView === 'snapshotForm' && !$store.app.snapshotEditTarget ? '新增資產快照' :
+      $store.app.currentView === 'snapshotForm' ? '編輯資產快照' :
       $store.app.currentView === 'form' && !$store.app.editTarget ? 'Add Transaction' :
       $store.app.currentView === 'form' ? 'Edit Transaction' : 'Settings'
     "></span>
-    <button x-show="$store.app.currentView === 'transactions'"
+    <button x-show="['transactions','trends'].includes($store.app.currentView)"
             @click="$store.app.currentView = 'settings'"
             class="btn-icon">⚙</button>
   </header>
@@ -201,6 +204,60 @@
               @click="$store.app.disconnectDrive()"
               class="btn-ghost">Disconnect</button>
     </div>
+  </main>
+
+  <!-- Asset Trend View -->
+  <main x-show="$store.app.currentView === 'trends'">
+
+    <!-- Latest total -->
+    <template x-if="$store.app.snapshots.length > 0">
+      <div class="latest-total">
+        <div class="latest-total-caption"
+             x-text="'最新總資產 (' + $store.app.snapshots[0].Date.replace(/-/g,'/') + ')'"></div>
+        <div class="latest-total-amount"
+             x-text="(($store.app.snapshots[0].Stock + $store.app.snapshots[0].Cash + $store.app.snapshots[0].FirstTrade + $store.app.snapshots[0].Property)|0).toLocaleString()"></div>
+      </div>
+    </template>
+
+    <!-- Chart -->
+    <div class="chart-container" x-show="$store.app.snapshots.length > 0">
+      <canvas id="asset-trend-chart"></canvas>
+    </div>
+
+    <!-- Snapshot history -->
+    <h3 class="section-title" x-show="$store.app.snapshots.length > 0">快照歷史</h3>
+
+    <ul class="snapshot-list">
+      <template x-if="$store.app.snapshots.length === 0">
+        <li class="empty-state">尚無資產快照資料</li>
+      </template>
+      <template x-for="s in $store.app.snapshots" :key="s.Id">
+        <li class="snapshot-card" @click="$store.app.openSnapshotEdit(s)">
+          <div class="snapshot-date" x-text="s.Date.replace(/-/g,'/')"></div>
+          <div class="snapshot-grid">
+            <div class="snapshot-cell">
+              <span class="snapshot-label">Stock</span>
+              <span class="snapshot-value" x-text="(s.Stock|0).toLocaleString()"></span>
+            </div>
+            <div class="snapshot-cell">
+              <span class="snapshot-label">Cash</span>
+              <span class="snapshot-value" x-text="(s.Cash|0).toLocaleString()"></span>
+            </div>
+            <div class="snapshot-cell">
+              <span class="snapshot-label">FirstTrade</span>
+              <span class="snapshot-value" x-text="(s.FirstTrade|0).toLocaleString()"></span>
+            </div>
+            <div class="snapshot-cell">
+              <span class="snapshot-label">Property(房產)</span>
+              <span class="snapshot-value" x-text="(s.Property|0).toLocaleString()"></span>
+            </div>
+          </div>
+        </li>
+      </template>
+    </ul>
+
+    <!-- FAB -->
+    <button class="fab" @click="$store.app.openSnapshotAdd()">+</button>
   </main>
 
   <!-- Toast -->

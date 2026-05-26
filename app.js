@@ -67,6 +67,29 @@ document.addEventListener('alpine:init', () => {
       this.snapshots = DB.getSnapshots();
     },
 
+    openSnapshotAdd() {
+      this.snapshotEditTarget = null;
+      this.snapshotForm = {
+        date: new Date().toISOString().slice(0, 10),
+        stock: '', cash: '', firstTrade: '', property: '',
+      };
+      this.snapshotErrors = {};
+      this.currentView = 'snapshotForm';
+    },
+
+    openSnapshotEdit(snapshot) {
+      this.snapshotEditTarget = snapshot;
+      this.snapshotForm = {
+        date: snapshot.Date,
+        stock: String(snapshot.Stock),
+        cash: String(snapshot.Cash),
+        firstTrade: String(snapshot.FirstTrade),
+        property: String(snapshot.Property),
+      };
+      this.snapshotErrors = {};
+      this.currentView = 'snapshotForm';
+    },
+
     prevMonth() {
       const [y, m] = this.filter.month.split('-').map(Number);
       const d = new Date(y, m - 2, 1);
