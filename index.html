@@ -260,6 +260,20 @@
     <button class="fab" @click="$store.app.openSnapshotAdd()">+</button>
   </main>
 
+  <!-- Bottom tab bar -->
+  <nav class="tab-bar" x-show="['transactions','trends'].includes($store.app.currentView)">
+    <button :class="{ active: $store.app.currentView === 'transactions' }"
+            @click="$store.app.currentView = 'transactions'">
+      <span class="tab-icon">📒</span>
+      <span class="tab-label">Transactions</span>
+    </button>
+    <button :class="{ active: $store.app.currentView === 'trends' }"
+            @click="$store.app.currentView = 'trends'; $store.app.loadSnapshots()">
+      <span class="tab-icon">📈</span>
+      <span class="tab-label">Trends</span>
+    </button>
+  </nav>
+
   <!-- Toast -->
   <div x-show="$store.app.toast.visible"
        x-transition
