@@ -168,7 +168,12 @@ document.addEventListener('alpine:init', () => {
       if (!_chart && canvas.offsetWidth === 0) {
         setTimeout(() => {
           const c = document.getElementById('asset-trend-chart');
-          if (c && c.offsetWidth > 0) this.renderChart();
+          if (c && c.offsetWidth > 0) {
+            this.renderChart();
+            this.showToast('chart: rendered on retry');
+          } else {
+            this.showToast('chart: retry failed (still 0×0)');
+          }
         }, 100);
         return;
       }
