@@ -192,6 +192,89 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   text-align: center;
 }
 
+/* Section title */
+.section-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin: 16px 0 8px;
+}
+
+/* Latest total card */
+.latest-total {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+.latest-total-caption {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.latest-total-amount {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* Chart container */
+.chart-container {
+  position: relative;
+  height: 280px;
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+.chart-container canvas {
+  max-width: 100%;
+}
+
+/* Snapshot card list */
+.snapshot-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.snapshot-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  cursor: pointer;
+}
+.snapshot-date {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.snapshot-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.snapshot-cell {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.snapshot-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+.snapshot-value {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
 /* Bottom tab bar */
 .tab-bar {
   position: fixed;
