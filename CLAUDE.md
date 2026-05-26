@@ -12,7 +12,7 @@ Static PWA companion to the MAUI accounting app. Accessible from iPhone via Safa
 
 ## Tech Stack
 
-- **UI:** Alpine.js (local vendor, no build step)
+- **UI:** Alpine.js + Chart.js v4 (local vendor, no build step)
 - **SQLite:** sql.js (WebAssembly — reads/writes the same `.db` format as MAUI app)
 - **Persistence:** OPFS (Origin Private File System, iOS 16+) with localStorage fallback
 - **Google Drive:** REST API v3, OAuth2 PKCE (Web application client, no client secret)
@@ -35,6 +35,7 @@ accounting-pwa/
 │   └── icon-512.png
 ├── vendor/             # All JS vendored locally so service worker can cache them
 │   ├── alpine.min.js
+│   ├── chart.umd.min.js
 │   ├── sql-wasm.js
 │   └── sql-wasm.wasm
 ├── docs/plans/         # Implementation plans
@@ -48,14 +49,18 @@ accounting-pwa/
 - **OPFS over localStorage:** no quota limit for binary files; localStorage (5MB cap) is fallback only
 - **OAuth redirect (not popup):** Safari on iOS blocks popups; full-page redirect always works
 - **Drive scope `drive` (not `drive.file`):** the backup file was created by the MAUI app (different client), so `drive.file` can't access it
-- **Single `index.html`:** 4 views (list, add/edit form, settings) via Alpine `x-show` — no router needed
+- **Drive restore IS the import mechanism:** all data flows through `Drive.restore() → DB.loadFromBytes()`; don't add CSV / manual import paths — Drive sync covers it
+- **Single `index.html`:** views toggled via Alpine `x-show`, no router needed; root views (`transactions` / `trends`) reachable via bottom tab bar, modal-like views (`form` / `snapshotForm` / `settings`) hide the tab bar
 
 ## Shared DB Schema (must match MAUI app exactly)
 
 ```sql
-Transactions (Id, Amount REAL, Currency TEXT DEFAULT 'TWD', CategoryId INTEGER, Date TEXT, Note TEXT, Type TEXT)
-Categories   (Id, Name TEXT, Icon TEXT, Type TEXT)
+Transactions  (Id, Amount REAL, Currency TEXT DEFAULT 'TWD', CategoryId INTEGER, Date INTEGER, Note TEXT, Type TEXT)
+Categories    (Id, Name TEXT, Icon TEXT, Type TEXT)
+AssetSnapshot (Id, Date INTEGER, Stock REAL, Cash REAL, FirstTrade REAL, Property REAL)
 ```
+
+Date columns store **.NET ticks (INTEGER)** to match MAUI SQLite-Net default (`storeDateTimeAsTicks = true`). Use `db.js` constants `TICKS_DATE_EXPR` / `DATE_TO_TICKS_EXPR` for SQL-side conversion.
 
 Backup file: `accounting_backup.db` in Google Drive folder `personaccount_backup`.
 
@@ -64,16 +69,34 @@ Backup file: `accounting_backup.db` in Google Drive folder `personaccount_backup
 | View | Trigger |
 |------|---------|
 | `transactions` | Default — list with month nav + type filter + FAB |
-| `form` | Add (FAB) or Edit (tap row) — shared form component |
-| `settings` | Gear icon — Drive auth, Backup, Restore |
+| `trends` | Bottom tab — Asset Trend latest-total + Chart.js stacked bar (Stock / Cash / FirstTrade / Property) + Total line + snapshot card list |
+| `form` | Add (FAB) or Edit (tap row) — shared transaction form |
+| `snapshotForm` | Add (FAB on trends) or Edit (tap snapshot card) — AssetSnapshot form (upsert by date) |
+| `settings` | Gear icon — Drive auth, Backup, Restore, Reset Service Worker |
 
 ## Development Guidelines
 
 - All asset paths use `./` relative references (GitHub Pages subpath compatibility)
 - After every DB mutation: call `exportAndPersist()` to write bytes to OPFS
 - OAuth callback: read `?code=` on page load, exchange token, `history.replaceState` to clean URL
-- Service worker cache key: `accounting-v1` — increment on each deploy for cache busting
+- Service worker cache key (`sw.js` `CACHE`): increment on every deploy that touches vendored / cached files (currently `accounting-v4`). Also add any new file to the `PRECACHE` array.
+- Run `runMigrations()` after **every** db load — both `initDB()` (fresh / OPFS) **and** `loadFromBytes()` (Drive restore). Idempotent via `_migrations` version table + `CREATE TABLE IF NOT EXISTS`. Missing this caused the v2 schema not to apply after restore (regression).
+- iPhone PWA debugging: provide an in-app **Reset Service Worker** button in Settings (`navigator.serviceWorker.getRegistrations() → unregister()` + `caches.delete()` + `location.reload()`). Don't tell users to clear Safari site data — that nukes OPFS too. With no Mac, this is the only way to force-refresh a stuck PWA.
 - Never store secrets — PKCE uses no client secret; `CLIENT_ID` is a public identifier
+
+## Deployment
+
+Two git remotes — **both need pushing for hot-fixes**:
+
+- `origin` → `hs-gitlab.higgstar.com:austin_poc/accounting-pwa` (primary repo, MRs reviewed here)
+- `github` → `https://github.com/austinchen705/accounting-pwa.git` (GitHub Pages auto-deploys from `master`)
+
+After merging an MR on GitLab, mirror to github for Pages deploy:
+
+```bash
+git push origin master   # if not auto-synced
+git push github master
+```
 
 ## One-Time Setup (before first deploy)
 
