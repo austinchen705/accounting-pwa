@@ -18,6 +18,18 @@ document.addEventListener('alpine:init', () => {
     form: { amount: '', currency: 'TWD', categoryId: '', date: '', note: '', type: 'expense' },
     errors: {},
 
+    // Asset Trend state
+    snapshots: [],
+    snapshotEditTarget: null,
+    snapshotForm: {
+      date: '',
+      stock: '',
+      cash: '',
+      firstTrade: '',
+      property: '',
+    },
+    snapshotErrors: {},
+
     async init() {
       // Handle OAuth callback
       const params = new URLSearchParams(window.location.search);
@@ -38,6 +50,7 @@ document.addEventListener('alpine:init', () => {
         await DB.initDB();
         this.driveStatus = Drive.isAuthenticated() ? 'connected' : 'disconnected';
         await this.loadTransactions();
+        this.loadSnapshots();
       } catch (e) {
         document.getElementById('fatal-error').style.display = 'flex';
       } finally {
@@ -48,6 +61,10 @@ document.addEventListener('alpine:init', () => {
     async loadTransactions() {
       this.categories = DB.getCategories(this.form.type || 'expense');
       this.transactions = DB.getTransactions(this.filter.month, this.filter.type);
+    },
+
+    loadSnapshots() {
+      this.snapshots = DB.getSnapshots();
     },
 
     prevMonth() {
