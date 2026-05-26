@@ -1,4 +1,4 @@
-const CACHE = 'accounting-v3';
+const CACHE = 'accounting-v4';
 const PRECACHE = [
   './',
   './index.html',
@@ -10,6 +10,7 @@ const PRECACHE = [
   './vendor/alpine.min.js',
   './vendor/sql-wasm.js',
   './vendor/sql-wasm.wasm',
+  './vendor/chart.umd.min.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
 ];
