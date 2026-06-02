@@ -184,21 +184,27 @@ document.addEventListener('alpine:init', () => {
       const total = asc.map((s, i) => stock[i] + cash[i] + firstTrade[i] + property[i]);
 
       const datasets = [
-        { type: 'bar', label: 'Stock',      data: stock,      backgroundColor: '#2563EB', stack: 'a' },
-        { type: 'bar', label: 'Cash',       data: cash,       backgroundColor: '#16A34A', stack: 'a' },
-        { type: 'bar', label: 'FirstTrade', data: firstTrade, backgroundColor: '#EA580C', stack: 'a' },
-        { type: 'bar', label: 'Property(房產)', data: property, backgroundColor: '#7C3AED', stack: 'a' },
+        { type: 'bar', label: 'Stock',      data: stock,      backgroundColor: '#2563EB', stack: 'a', order: 2 },
+        { type: 'bar', label: 'Cash',       data: cash,       backgroundColor: '#16A34A', stack: 'a', order: 2 },
+        { type: 'bar', label: 'FirstTrade', data: firstTrade, backgroundColor: '#EA580C', stack: 'a', order: 2 },
+        { type: 'bar', label: 'Property(房產)', data: property, backgroundColor: '#7C3AED', stack: 'a', order: 2 },
         {
           type: 'line', label: 'Total', data: total,
           yAxisID: 'yLine',
+          order: 0,
           borderColor: '#111827', backgroundColor: '#111827',
-          borderWidth: 3, pointRadius: 4, pointHoverRadius: 6, fill: false, tension: 0,
+          borderWidth: 4, pointRadius: 5, pointHoverRadius: 7,
+          pointBackgroundColor: '#FFFFFF', pointBorderColor: '#111827', pointBorderWidth: 2,
+          fill: false, tension: 0,
         },
         {
           type: 'line', label: 'Stock + Cash', data: stockCash,
           yAxisID: 'yLine',
+          order: 0,
           borderColor: '#DC2626', backgroundColor: '#DC2626',
-          borderWidth: 3, pointRadius: 4, pointHoverRadius: 6, fill: false, tension: 0,
+          borderWidth: 4, pointRadius: 5, pointHoverRadius: 7,
+          pointBackgroundColor: '#FFFFFF', pointBorderColor: '#DC2626', pointBorderWidth: 2,
+          fill: false, tension: 0,
         },
       ];
 
