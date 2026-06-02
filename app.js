@@ -180,6 +180,7 @@ document.addEventListener('alpine:init', () => {
       const cash = asc.map(s => s.Cash);
       const firstTrade = asc.map(s => s.FirstTrade);
       const property = asc.map(s => s.Property);
+      const stockCash = asc.map((s, i) => stock[i] + cash[i]);
       const total = asc.map((s, i) => stock[i] + cash[i] + firstTrade[i] + property[i]);
 
       const datasets = [
@@ -190,6 +191,11 @@ document.addEventListener('alpine:init', () => {
         {
           type: 'line', label: 'Total', data: total,
           borderColor: '#111827', backgroundColor: '#111827',
+          borderWidth: 3, pointRadius: 4, pointHoverRadius: 6, fill: false, tension: 0,
+        },
+        {
+          type: 'line', label: 'Stock + Cash', data: stockCash,
+          borderColor: '#DC2626', backgroundColor: '#DC2626',
           borderWidth: 3, pointRadius: 4, pointHoverRadius: 6, fill: false, tension: 0,
         },
       ];
