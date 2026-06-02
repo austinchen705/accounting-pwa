@@ -198,7 +198,7 @@ document.addEventListener('alpine:init', () => {
           fill: false, tension: 0,
         },
         {
-          type: 'line', label: 'Total - Property', data: nonPropertyTotal,
+          type: 'line', label: '活動資產', data: nonPropertyTotal,
           yAxisID: 'yLine',
           order: 0,
           borderColor: '#DC2626', backgroundColor: '#DC2626',
