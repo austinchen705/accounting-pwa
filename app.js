@@ -190,11 +190,13 @@ document.addEventListener('alpine:init', () => {
         { type: 'bar', label: 'Property(房產)', data: property, backgroundColor: '#7C3AED', stack: 'a' },
         {
           type: 'line', label: 'Total', data: total,
+          yAxisID: 'yLine',
           borderColor: '#111827', backgroundColor: '#111827',
           borderWidth: 3, pointRadius: 4, pointHoverRadius: 6, fill: false, tension: 0,
         },
         {
           type: 'line', label: 'Stock + Cash', data: stockCash,
+          yAxisID: 'yLine',
           borderColor: '#DC2626', backgroundColor: '#DC2626',
           borderWidth: 3, pointRadius: 4, pointHoverRadius: 6, fill: false, tension: 0,
         },
@@ -220,6 +222,17 @@ document.addEventListener('alpine:init', () => {
             y: {
               stacked: true,
               beginAtZero: true,
+              ticks: {
+                callback: v => Number(v).toLocaleString(),
+              },
+            },
+            yLine: {
+              display: false,
+              stacked: false,
+              beginAtZero: true,
+              grid: {
+                drawOnChartArea: false,
+              },
               ticks: {
                 callback: v => Number(v).toLocaleString(),
               },
