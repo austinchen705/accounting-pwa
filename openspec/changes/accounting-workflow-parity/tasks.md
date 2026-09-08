@@ -1,13 +1,13 @@
 ## 1. Compatibility Foundation
 
-- [ ] 1.1 Add a Node test harness for pure browser modules and sql.js schema checks
+- [x] 1.1 Add a Node test harness for pure browser modules and sql.js schema checks
 - [ ] 1.2 Add additive MAUI-compatible migrations for budgets, exchange-rate cache, attachment metadata, and indexes
 - [ ] 1.3 Add repository queries and mutations required by every parity workflow
 - [ ] 1.4 Verify an older and a MAUI-shaped database migrate without record or identifier loss
 
 ## 2. Shell and Home
 
-- [ ] 2.1 Add modular date-window, money-summary, ranking, and chart-axis helpers with unit tests
+- [x] 2.1 Add modular date-window, money-summary, ranking, and chart-axis helpers with unit tests
 - [ ] 2.2 Replace the two-tab shell with five primary destinations and a More hub
 - [ ] 2.3 Implement the month-scoped Home summary and recent activity view
 
