@@ -239,13 +239,18 @@
 
   function parseAssetCsv(content) {
     const lines = String(content || '').split(/\r?\n/).filter(line => line.trim());
+    const expectedHeader = ['date', 'stock', 'cash', 'firsttrade', 'property'];
+    const header = (lines[0] || '').replace(/^\uFEFF/, '').split(',').map(value => value.trim().toLowerCase());
+    if (expectedHeader.some((name, index) => header[index] !== name)) {
+      throw new Error('Invalid asset CSV header. Expected Date,Stock,Cash,FirstTrade,Property.');
+    }
     const snapshots = [];
     const errors = [];
     for (let index = 1; index < lines.length; index += 1) {
       const columns = lines[index].split(',').map(value => value.trim());
       const date = parseIsoDate(columns[0]);
       const values = columns.slice(1, 5).map(Number);
-      if (columns.length < 5 || !date || values.some(value => !Number.isFinite(value))) {
+      if (columns.length < 5 || !date || columns.slice(1, 5).some(value => value === '') || values.some(value => !Number.isFinite(value))) {
         errors.push(`Skipped row ${index + 1}: invalid date or numeric value.`);
         continue;
       }
@@ -258,6 +263,58 @@
     const rate = Number(exchangeRate);
     if (!Number.isFinite(rate) || rate <= 0 || rate === 1) throw new Error('USD/TWD exchange rate is unavailable.');
     return Math.round((Number(amount) * rate + Number.EPSILON) * 100) / 100;
+  }
+
+  function convertTwdToUsd(amount, exchangeRate) {
+    const rate = Number(exchangeRate);
+    if (!Number.isFinite(rate) || rate <= 0 || rate === 1) throw new Error('USD/TWD exchange rate is unavailable.');
+    return Math.round((Number(amount) / rate + Number.EPSILON) * 100) / 100;
+  }
+
+  function firstTradeValueForStorage(amount, isEditing, exchangeRate) {
+    return isEditing ? Number(amount || 0) : convertUsdToTwd(amount, exchangeRate);
+  }
+
+  function exchangeRateCacheInfo(cache, targetCurrency, now = new Date(), maxAgeMs = 24 * 60 * 60 * 1000) {
+    const rate = Number(cache?.rates?.[targetCurrency]);
+    const updatedAt = Date.parse(cache?.updatedAt);
+    if (!Number.isFinite(rate) || rate <= 0 || rate === 1 || !Number.isFinite(updatedAt)) {
+      return { rate: null, fresh: false };
+    }
+    return { rate, fresh: now.getTime() - updatedAt < maxAgeMs };
+  }
+
+  function latestSnapshot(snapshots) {
+    return [...(snapshots || [])].sort((left, right) =>
+      String(right.Date || right.date).localeCompare(String(left.Date || left.date)) || Number(right.Id || 0) - Number(left.Id || 0)
+    )[0] || null;
+  }
+
+  function prefillLatestSnapshot(draft, snapshots, exchangeRate) {
+    const latest = latestSnapshot(snapshots);
+    if (!latest) return { ...draft };
+    return {
+      ...draft,
+      stock: Number(latest.Stock),
+      cash: Number(latest.Cash),
+      firstTrade: convertTwdToUsd(latest.FirstTrade, exchangeRate),
+      property: Number(latest.Property),
+    };
+  }
+
+  function assetSnapshotSummary(snapshot) {
+    if (!snapshot) return { total: 0, liquid: 0 };
+    const liquid = Number(snapshot.Stock || 0) + Number(snapshot.Cash || 0) + Number(snapshot.FirstTrade || 0);
+    return { total: liquid + Number(snapshot.Property || 0), liquid };
+  }
+
+  function assetDateLabels(isoDates, expanded = false) {
+    if (expanded) return (isoDates || []).map(date => String(date).replace(/-/g, '/'));
+    const dates = isoDates || [];
+    const short = date => String(date).slice(5).replace('-', '/');
+    if (dates.length <= 6) return dates.map(short);
+    const step = dates.length <= 12 ? 2 : dates.length <= 24 ? 3 : 5;
+    return dates.map((date, index) => index === dates.length - 1 || index % step === 0 ? short(date) : '');
   }
 
   function sanitizeAmount(raw) {
@@ -286,6 +343,13 @@
     niceAxisStep,
     parseAssetCsv,
     convertUsdToTwd,
+    convertTwdToUsd,
+    firstTradeValueForStorage,
+    exchangeRateCacheInfo,
+    latestSnapshot,
+    prefillLatestSnapshot,
+    assetSnapshotSummary,
+    assetDateLabels,
     sanitizeAmount,
   };
 });

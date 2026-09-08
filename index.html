@@ -496,14 +496,43 @@
         <div class="latest-total-caption"
              x-text="'最新總資產 (' + $store.app.snapshots[0].Date.replace(/-/g,'/') + ')'"></div>
         <div class="latest-total-amount"
-             x-text="(($store.app.snapshots[0].Stock + $store.app.snapshots[0].Cash + $store.app.snapshots[0].FirstTrade + $store.app.snapshots[0].Property)|0).toLocaleString()"></div>
+             x-text="Math.round($store.app.latestAssetSummary().total).toLocaleString()"></div>
+        <div class="latest-liquid"
+             x-text="'活動資產 ' + Math.round($store.app.latestAssetSummary().liquid).toLocaleString()"></div>
       </div>
     </template>
 
     <!-- Chart -->
     <div class="chart-container" x-show="$store.app.snapshots.length > 0">
+      <button class="chart-expand" type="button" @click="$store.app.openAssetChart()" aria-label="展開資產趨勢圖">⛶</button>
       <canvas id="asset-trend-chart"></canvas>
     </div>
+
+    <section class="asset-import-panel">
+      <div class="section-toolbar">
+        <h3 class="section-title">CSV 匯入</h3>
+        <span class="import-file-name" x-text="$store.app.assetImport.fileName || '尚未選擇檔案'"></span>
+      </div>
+      <label class="file-button">
+        選擇 CSV
+        <input type="file" accept=".csv,text/csv" @change="$store.app.selectAssetCsv($event)">
+      </label>
+      <div class="asset-import-actions">
+        <select aria-label="資產匯入模式" x-model="$store.app.assetImport.mode">
+          <option value="append">附加／同日更新</option>
+          <option value="replace">清空後取代</option>
+        </select>
+        <button type="button" class="btn-secondary"
+                :disabled="!$store.app.assetImport.parsed?.importedCount"
+                @click="$store.app.importAssetCsv()">開始匯入</button>
+      </div>
+      <p class="import-summary" x-show="$store.app.assetImport.fileName && !$store.app.assetImport.error"
+         x-text="'可匯入 ' + $store.app.assetImport.importedCount + ' 筆，略過 ' + $store.app.assetImport.skippedCount + ' 筆'"></p>
+      <p class="error" x-show="$store.app.assetImport.error" x-text="$store.app.assetImport.error"></p>
+      <ul class="import-errors" x-show="$store.app.assetImport.errors.length">
+        <template x-for="error in $store.app.assetImport.errors" :key="error"><li x-text="error"></li></template>
+      </ul>
+    </section>
 
     <!-- Snapshot history -->
     <h3 class="section-title" x-show="$store.app.snapshots.length > 0">快照歷史</h3>
@@ -541,6 +570,13 @@
     <button class="fab" @click="$store.app.openSnapshotAdd()">+</button>
   </main>
 
+  <main x-show="$store.app.currentView === 'assetChart'" class="asset-chart-view">
+    <div class="chart-container expanded" x-show="$store.app.snapshots.length > 0">
+      <canvas id="asset-trend-chart-expanded"></canvas>
+    </div>
+    <div class="empty-state" x-show="$store.app.snapshots.length === 0">尚無資產快照資料</div>
+  </main>
+
   <!-- Snapshot Form View -->
   <main x-show="$store.app.currentView === 'snapshotForm'">
     <form @submit.prevent="$store.app.saveSnapshot()" class="tx-form">
@@ -566,10 +602,16 @@
       </div>
 
       <div class="form-group">
-        <label for="snap-first-trade">FirstTrade</label>
-        <input id="snap-first-trade" type="number" inputmode="numeric" step="1" min="0"
+        <label for="snap-first-trade" x-text="$store.app.snapshotEditTarget ? 'FirstTrade（TWD）' : 'FirstTrade（USD）'"></label>
+        <input id="snap-first-trade" type="number" inputmode="decimal" step="0.01" min="0"
                x-model="$store.app.snapshotForm.firstTrade" placeholder="0">
         <span class="error" x-text="$store.app.snapshotErrors.firstTrade"></span>
+        <small x-show="!$store.app.snapshotEditTarget && $store.app.assetRate.loading">正在取得 USD/TWD 匯率…</small>
+        <small x-show="!$store.app.snapshotEditTarget && $store.app.snapshotFirstTradePreview() !== null"
+               x-text="$store.app.snapshotFirstTradePreview() === null ? '' : '約 TWD ' + $store.app.snapshotFirstTradePreview().toLocaleString() + '（USD/TWD ' + $store.app.assetRate.value + '）'"></small>
+        <small class="rate-warning" x-show="!$store.app.snapshotEditTarget && $store.app.assetRate.error"
+               x-text="$store.app.assetRate.error"></small>
+        <small x-show="$store.app.snapshotEditTarget">編輯模式顯示並儲存既有 TWD 金額。</small>
       </div>
 
       <div class="form-group">
@@ -578,6 +620,10 @@
                x-model="$store.app.snapshotForm.property" placeholder="0">
         <span class="error" x-text="$store.app.snapshotErrors.property"></span>
       </div>
+
+      <button type="button" class="btn-secondary"
+              x-show="!$store.app.snapshotEditTarget && $store.app.snapshots.length"
+              @click="$store.app.prefillLatestSnapshot()">帶入最新快照金額</button>
 
       <button type="submit" class="btn-primary">
         <span x-text="$store.app.snapshotEditTarget ? '更新快照' : '新增快照'"></span>

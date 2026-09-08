@@ -467,6 +467,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   font-weight: 700;
   color: var(--text);
 }
+.latest-liquid { margin-top: 5px; color: var(--muted); font-size: 0.9rem; }
 
 /* Chart container */
 .chart-container {
@@ -482,6 +483,44 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .chart-container canvas {
   max-width: 100%;
 }
+
+.chart-expand {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  color: var(--text);
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.asset-chart-view { max-width: 1400px; }
+.chart-container.expanded { height: calc(100vh - 120px); min-height: 420px; margin: 0; }
+
+.asset-import-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  margin-bottom: 18px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.asset-import-panel .section-toolbar { margin-top: 0; }
+.asset-import-panel .section-title { margin: 0; }
+.import-file-name { max-width: 58%; overflow: hidden; color: var(--muted); font-size: 0.82rem; text-overflow: ellipsis; white-space: nowrap; }
+.asset-import-actions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.asset-import-actions select { min-width: 0; min-height: 48px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.import-summary { color: var(--muted); font-size: 0.9rem; }
+.import-errors { padding-left: 20px; color: #b45309; font-size: 0.82rem; }
+.rate-warning { color: #b45309; }
 
 /* Snapshot card list */
 .snapshot-list {
@@ -565,6 +604,11 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   .summary-card.balance-card { grid-column: auto; }
   .menu-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .insight-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (max-width: 480px) {
+  .asset-import-actions { grid-template-columns: 1fr; }
+  .chart-container.expanded { min-height: 520px; }
 }
 
 /* Toast */

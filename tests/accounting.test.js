@@ -113,6 +113,59 @@ test('converts FirstTrade USD values and rejects unavailable rates', () => {
   assert.throws(() => Accounting.convertUsdToTwd(100, 0), /unavailable/i);
 });
 
+test('stores new FirstTrade input as TWD while edits preserve stored TWD', () => {
+  assert.equal(Accounting.firstTradeValueForStorage(100, false, 30.1234), 3012.34);
+  assert.equal(Accounting.firstTradeValueForStorage(3012.34, true, null), 3012.34);
+  assert.throws(() => Accounting.firstTradeValueForStorage(100, false, null), /unavailable/i);
+});
+
+test('reads usable fresh and stale USD to TWD cache entries', () => {
+  const now = new Date('2026-09-08T12:00:00Z');
+  assert.deepEqual(Accounting.exchangeRateCacheInfo({
+    rates: { TWD: 30.5 }, updatedAt: '2026-09-08T00:00:00Z',
+  }, 'TWD', now), { rate: 30.5, fresh: true });
+  assert.deepEqual(Accounting.exchangeRateCacheInfo({
+    rates: { TWD: 30.5 }, updatedAt: '2026-09-06T00:00:00Z',
+  }, 'TWD', now), { rate: 30.5, fresh: false });
+  assert.deepEqual(Accounting.exchangeRateCacheInfo({ rates: { TWD: 1 }, updatedAt: now.toISOString() }, 'TWD', now), {
+    rate: null, fresh: false,
+  });
+});
+
+test('prefills a new asset draft from the newest snapshot without replacing its date', () => {
+  const draft = { date: '2026-09-08', stock: '', cash: '', firstTrade: '', property: '' };
+  const snapshots = [
+    { Date: '2026-08-01', Stock: 1, Cash: 2, FirstTrade: 3, Property: 4 },
+    { Date: '2026-09-01', Stock: 100, Cash: 200, FirstTrade: 3012.34, Property: 400 },
+  ];
+  assert.deepEqual(Accounting.prefillLatestSnapshot(draft, snapshots, 30.1234), {
+    date: '2026-09-08', stock: 100, cash: 200, firstTrade: 100, property: 400,
+  });
+  assert.throws(() => Accounting.prefillLatestSnapshot(draft, snapshots, 1), /unavailable/i);
+});
+
+test('summarizes latest total and liquid assets', () => {
+  assert.deepEqual(Accounting.assetSnapshotSummary({
+    Stock: 10, Cash: 20, FirstTrade: 30, Property: 40,
+  }), { total: 100, liquid: 60 });
+});
+
+test('builds condensed and expanded asset date labels', () => {
+  const dates = Array.from({ length: 8 }, (_, index) => `2026-01-${String(index + 1).padStart(2, '0')}`);
+  assert.deepEqual(Accounting.assetDateLabels(dates, false), ['01/01', '', '01/03', '', '01/05', '', '01/07', '01/08']);
+  assert.deepEqual(Accounting.assetDateLabels(dates, true), dates.map(date => date.replace(/-/g, '/')));
+});
+
+test('validates asset CSV headers and rejects empty numeric cells', () => {
+  const parsed = Accounting.parseAssetCsv(
+    '\uFEFFDate,Stock,Cash,FirstTrade,Property\n2026-09-01,10,20,30,40\n2026-09-02,10,,30,40',
+  );
+  assert.equal(parsed.importedCount, 1);
+  assert.equal(parsed.skippedCount, 1);
+  assert.match(parsed.errors[0], /row 3/i);
+  assert.throws(() => Accounting.parseAssetCsv('Date,Stock,Cash,FirstTrade,Fund3\n2026-09-01,1,2,3,4'), /header/i);
+});
+
 test('moves report anchors without changing all-time anchors', () => {
   assert.equal(Accounting.moveReportAnchor('week', '2026-09-08', -1), '2026-09-01');
   assert.equal(Accounting.moveReportAnchor('month', '2026-01-15', -1), '2025-12-01');

@@ -5,6 +5,7 @@ function currentMonth() {
 }
 
 let _chart = null;
+let _assetDetailChart = null;
 let _reportChart = null;
 let _statisticsChart = null;
 let _categoryTrendChart = null;
@@ -48,6 +49,11 @@ document.addEventListener('alpine:init', () => {
       property: '',
     },
     snapshotErrors: {},
+    assetRate: { value: null, source: '', loading: false, error: '' },
+    assetImport: {
+      fileName: '', mode: 'append', parsed: null,
+      importedCount: 0, skippedCount: 0, errors: [], error: '',
+    },
     report: {
       ...initialState.report,
       window: null,
@@ -88,7 +94,7 @@ document.addEventListener('alpine:init', () => {
       else if (view === 'transactions') await this.loadTransactions();
       else if (view === 'categories') await this.loadManagedCategories();
       else if (view === 'budgets') await this.loadBudgets();
-      else if (view === 'trends') this.loadSnapshots();
+      else if (view === 'trends') await this.loadSnapshots(true);
       else if (view === 'statistics') await this.loadStatistics();
       else if (view === 'categoryReport') await this.loadCategoryReport();
     },
@@ -516,13 +522,38 @@ document.addEventListener('alpine:init', () => {
       return AppState.budgetProgress(item);
     },
 
-    loadSnapshots() {
+    async loadSnapshots(refreshRate = false) {
       this.snapshots = DB.getSnapshots();
+      if (refreshRate) await this.loadAssetExchangeRate();
       // canvas 可能還沒 mount，延後一拍
       requestAnimationFrame(() => this.renderChart());
     },
 
-    openSnapshotAdd() {
+    async loadAssetExchangeRate(force = false) {
+      const cached = Accounting.exchangeRateCacheInfo(DB.getExchangeRates('USD'), 'TWD');
+      if (!force && cached.fresh) {
+        this.assetRate = { value: cached.rate, source: 'cache', loading: false, error: '' };
+        return cached.rate;
+      }
+      this.assetRate = { value: cached.rate, source: cached.rate ? 'stale-cache' : '', loading: true, error: '' };
+      try {
+        const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        const rate = Number(payload.rates?.TWD);
+        if (!Number.isFinite(rate) || rate <= 0 || rate === 1) throw new Error('回傳資料缺少 USD/TWD 匯率');
+        await DB.setExchangeRates('USD', payload.rates || {}, new Date().toISOString());
+        this.assetRate = { value: rate, source: 'live', loading: false, error: '' };
+        return rate;
+      } catch (error) {
+        this.assetRate = cached.rate
+          ? { value: cached.rate, source: 'stale-cache', loading: false, error: '即時匯率無法取得，使用上次快取匯率。' }
+          : { value: null, source: '', loading: false, error: `USD/TWD 匯率無法取得：${error.message}` };
+        return this.assetRate.value;
+      }
+    },
+
+    async openSnapshotAdd() {
       this.snapshotEditTarget = null;
       this.snapshotForm = {
         date: new Date().toISOString().slice(0, 10),
@@ -530,6 +561,7 @@ document.addEventListener('alpine:init', () => {
       };
       this.snapshotErrors = {};
       this.currentView = 'snapshotForm';
+      await this.loadAssetExchangeRate();
     },
 
     openSnapshotEdit(snapshot) {
@@ -545,6 +577,32 @@ document.addEventListener('alpine:init', () => {
       this.currentView = 'snapshotForm';
     },
 
+    prefillLatestSnapshot() {
+      try {
+        this.snapshotForm = Accounting.prefillLatestSnapshot(
+          this.snapshotForm,
+          this.snapshots,
+          this.assetRate.value,
+        );
+        this.snapshotErrors = {};
+      } catch (error) {
+        this.snapshotErrors.firstTrade = error.message;
+      }
+    },
+
+    snapshotFirstTradePreview() {
+      if (this.snapshotEditTarget || !(Number(this.snapshotForm.firstTrade) > 0) || !this.assetRate.value) return null;
+      try {
+        return Accounting.convertUsdToTwd(this.snapshotForm.firstTrade, this.assetRate.value);
+      } catch {
+        return null;
+      }
+    },
+
+    latestAssetSummary() {
+      return Accounting.assetSnapshotSummary(Accounting.latestSnapshot(this.snapshots));
+    },
+
     validateSnapshotForm() {
       this.snapshotErrors = {};
       if (!this.snapshotForm.date) {
@@ -558,6 +616,9 @@ document.addEventListener('alpine:init', () => {
           this.snapshotErrors[field] = '資產值必須為非負數';
         }
       }
+      if (!this.snapshotEditTarget && Number(this.snapshotForm.firstTrade) > 0 && !this.assetRate.value) {
+        this.snapshotErrors.firstTrade = '無法取得 USD/TWD 匯率，FirstTrade 尚不能儲存。';
+      }
       return Object.keys(this.snapshotErrors).length === 0;
     },
 
@@ -570,11 +631,16 @@ document.addEventListener('alpine:init', () => {
     async saveSnapshot() {
       if (!this.validateSnapshotForm()) return;
 
+      const firstTradeInput = this.parseSnapshotValue(this.snapshotForm.firstTrade);
       const payload = {
         date: this.snapshotForm.date,
         stock: this.parseSnapshotValue(this.snapshotForm.stock),
         cash: this.parseSnapshotValue(this.snapshotForm.cash),
-        firstTrade: this.parseSnapshotValue(this.snapshotForm.firstTrade),
+        firstTrade: firstTradeInput === 0 ? 0 : Accounting.firstTradeValueForStorage(
+          firstTradeInput,
+          Boolean(this.snapshotEditTarget),
+          this.assetRate.value,
+        ),
         property: this.parseSnapshotValue(this.snapshotForm.property),
       };
 
@@ -587,7 +653,7 @@ document.addEventListener('alpine:init', () => {
             this.showToast(`已取代 ${payload.date.replace(/-/g,'/')} 當日資料`);
           }
         }
-        this.loadSnapshots();
+        await this.loadSnapshots();
         this.currentView = 'trends';
       } catch (e) {
         this.showToast('儲存失敗：' + (e.message || 'unknown'));
@@ -599,34 +665,85 @@ document.addEventListener('alpine:init', () => {
       if (!confirm('刪除此資產快照？')) return;
       try {
         await DB.deleteSnapshot(this.snapshotEditTarget.Id);
-        this.loadSnapshots();
+        await this.loadSnapshots();
         this.currentView = 'trends';
       } catch (e) {
         this.showToast('刪除失敗：' + (e.message || 'unknown'));
       }
     },
 
+    async selectAssetCsv(event) {
+      const file = event.target.files?.[0];
+      event.target.value = '';
+      if (!file) return;
+      this.assetImport = {
+        ...this.assetImport,
+        fileName: file.name,
+        parsed: null,
+        importedCount: 0,
+        skippedCount: 0,
+        errors: [],
+        error: '',
+      };
+      try {
+        const parsed = Accounting.parseAssetCsv(await file.text());
+        this.assetImport.parsed = parsed;
+        this.assetImport.importedCount = parsed.importedCount;
+        this.assetImport.skippedCount = parsed.skippedCount;
+        this.assetImport.errors = parsed.errors;
+      } catch (error) {
+        this.assetImport.error = error.message;
+      }
+    },
+
+    async importAssetCsv() {
+      const parsed = this.assetImport.parsed;
+      if (!parsed?.importedCount) return;
+      const replace = this.assetImport.mode === 'replace';
+      if (replace && !confirm('這會清空目前所有資產快照，再匯入此 CSV。確定繼續？')) return;
+      try {
+        await DB.importSnapshots(parsed.snapshots, replace);
+        await this.loadSnapshots();
+        this.showToast(`匯入完成：${parsed.importedCount} 筆，略過 ${parsed.skippedCount} 筆`);
+      } catch (error) {
+        this.assetImport.error = `匯入失敗：${error.message}`;
+      }
+    },
+
+    openAssetChart() {
+      this.currentView = 'assetChart';
+      requestAnimationFrame(() => setTimeout(() => this.renderAssetChart(true), 0));
+    },
+
     renderChart() {
-      const canvas = document.getElementById('asset-trend-chart');
+      this.renderAssetChart(false);
+    },
+
+    renderAssetChart(expanded = false) {
+      const canvas = document.getElementById(expanded ? 'asset-trend-chart-expanded' : 'asset-trend-chart');
       if (!canvas) return; // trends view 還沒在 DOM
       if (!this.snapshots.length) {
-        if (_chart) { _chart.destroy(); _chart = null; }
+        const existing = expanded ? _assetDetailChart : _chart;
+        if (existing) existing.destroy();
+        if (expanded) _assetDetailChart = null;
+        else _chart = null;
         return;
       }
       // canvas 在 display:none 容器內時 offsetWidth = 0；此時不建 chart instance
       // 避免 Chart.js 建出 0×0 的圖、之後切到 trends 不會自動 resize
       // 若 Alpine x-show 還沒 propagate 完（iOS Safari 偶有時序差），延 100ms 再試一次
-      if (!_chart && canvas.offsetWidth === 0) {
+      const existingChart = expanded ? _assetDetailChart : _chart;
+      if (!existingChart && canvas.offsetWidth === 0) {
         setTimeout(() => {
-          const c = document.getElementById('asset-trend-chart');
-          if (c && c.offsetWidth > 0) this.renderChart();
+          const c = document.getElementById(expanded ? 'asset-trend-chart-expanded' : 'asset-trend-chart');
+          if (c && c.offsetWidth > 0) this.renderAssetChart(expanded);
         }, 100);
         return;
       }
 
       // 依日期升序排列以畫圖
       const asc = [...this.snapshots].sort((a, b) => a.Date.localeCompare(b.Date));
-      const labels = this.buildCondensedLabels(asc.map(s => s.Date));
+      const labels = Accounting.assetDateLabels(asc.map(s => s.Date), expanded);
       const stock = asc.map(s => s.Stock);
       const cash = asc.map(s => s.Cash);
       const firstTrade = asc.map(s => s.FirstTrade);
@@ -659,14 +776,14 @@ document.addEventListener('alpine:init', () => {
         },
       ];
 
-      if (_chart) {
-        _chart.data.labels = labels;
-        _chart.data.datasets = datasets;
-        _chart.update();
+      if (existingChart) {
+        existingChart.data.labels = labels;
+        existingChart.data.datasets = datasets;
+        existingChart.update();
         return;
       }
 
-      _chart = new Chart(canvas, {
+      const chart = new Chart(canvas, {
         data: { labels, datasets },
         options: {
           responsive: true,
@@ -680,6 +797,7 @@ document.addEventListener('alpine:init', () => {
               stacked: true,
               beginAtZero: true,
               ticks: {
+                stepSize: Math.max(Accounting.niceAxisStep(total), expanded ? 500000 : 2500000),
                 callback: v => Number(v).toLocaleString(),
               },
             },
@@ -697,19 +815,8 @@ document.addEventListener('alpine:init', () => {
           },
         },
       });
-    },
-
-    // 仿 MAUI BuildCondensedDateLabels：snapshots 多時降採樣 label
-    buildCondensedLabels(isoDates) {
-      const toShort = iso => {
-        const [, m, d] = iso.split('-');
-        return `${m}/${d}`;
-      };
-      if (isoDates.length <= 6) return isoDates.map(toShort);
-      const step = isoDates.length <= 12 ? 2 : isoDates.length <= 24 ? 3 : 5;
-      return isoDates.map((iso, i) =>
-        (i === isoDates.length - 1 || i % step === 0) ? toShort(iso) : ''
-      );
+      if (expanded) _assetDetailChart = chart;
+      else _chart = chart;
     },
 
     prevMonth() {

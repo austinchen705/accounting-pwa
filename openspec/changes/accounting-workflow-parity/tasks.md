@@ -33,10 +33,10 @@
 
 ## 6. Asset Trend Parity
 
-- [ ] 6.1 Implement latest-snapshot prefill and newest-first history behavior
-- [ ] 6.2 Add cached FirstTrade USD-to-TWD conversion with explicit unavailable-rate handling
-- [ ] 6.3 Add tested CSV parsing plus append/upsert and confirmed replacement flows
-- [ ] 6.4 Add an expanded responsive asset chart and preserve state when returning
+- [x] 6.1 Implement latest-snapshot prefill and newest-first history behavior
+- [x] 6.2 Add cached FirstTrade USD-to-TWD conversion with explicit unavailable-rate handling
+- [x] 6.3 Add tested CSV parsing plus append/upsert and confirmed replacement flows
+- [x] 6.4 Add an expanded responsive asset chart and preserve state when returning
 
 ## 7. Offline Delivery and Verification
 

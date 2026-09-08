@@ -16,6 +16,7 @@
     categories: '分類管理',
     budgets: '預算',
     trends: '資產趨勢',
+    assetChart: '資產趨勢圖',
     settings: '設定',
     form: '交易',
     categoryForm: '分類',

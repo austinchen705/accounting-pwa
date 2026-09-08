@@ -19,6 +19,7 @@ test('maps contextual views back to the correct destination', () => {
   assert.equal(AppState.backView('snapshotForm'), 'trends');
   assert.equal(AppState.backView('categories'), 'more');
   assert.equal(AppState.backView('budgetForm'), 'budgets');
+  assert.equal(AppState.backView('assetChart'), 'trends');
 });
 
 test('shows the primary tab bar only on primary destinations', () => {
@@ -51,6 +52,7 @@ test('provides titles for primary and secondary views', () => {
   assert.equal(AppState.viewTitle('home'), '總覽');
   assert.equal(AppState.viewTitle('categories'), '分類管理');
   assert.equal(AppState.viewTitle('budgetForm', { editing: true }), '編輯預算');
+  assert.equal(AppState.viewTitle('assetChart'), '資產趨勢圖');
 });
 
 test('defines the guided transaction input order', () => {

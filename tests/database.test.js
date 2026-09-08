@@ -98,7 +98,15 @@ test('round-trips exchange cache and replaces snapshots explicitly', async () =>
   assert.deepEqual(cache.rates, { USD: 0.03 });
   assert.equal(cache.updatedAt, '2026-09-08T00:00:00.000Z');
 
-  await api.importSnapshots([{ date: '2026-09-01', stock: 1, cash: 2, firstTrade: 3, property: 4 }], false);
+  await api.importSnapshots([
+    { date: '2026-09-01', stock: 1, cash: 2, firstTrade: 3, property: 4 },
+    { date: '2026-09-02', stock: 10, cash: 20, firstTrade: 30, property: 40 },
+  ], false);
+  await api.importSnapshots([{ date: '2026-09-02', stock: 11, cash: 21, firstTrade: 31, property: 41 }], false);
+  assert.deepEqual(api.getSnapshots().map(row => [row.Date, row.Stock]), [
+    ['2026-09-02', 11],
+    ['2026-09-01', 1],
+  ]);
   await api.importSnapshots([{ date: '2026-09-02', stock: 5, cash: 6, firstTrade: 7, property: 8 }], true);
   assert.deepEqual(api.getSnapshots().map(row => row.Date), ['2026-09-02']);
 });
