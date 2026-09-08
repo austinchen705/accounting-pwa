@@ -272,6 +272,22 @@ main {
 /* Form */
 .tx-form { display: flex; flex-direction: column; gap: 16px; }
 
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 10px 0 14px;
+}
+
+.filter-grid select {
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
 .form-group { display: flex; flex-direction: column; gap: 6px; }
 
 .form-group label { font-size: 0.9rem; font-weight: 500; color: var(--muted); }
@@ -303,6 +319,92 @@ main {
 .radio-group input[type=radio] { width: 20px; height: 20px; cursor: pointer; }
 
 .error { color: var(--danger); font-size: 0.85rem; }
+
+.category-chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 0 10px;
+}
+
+.category-chips button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.category-chips button.active {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface));
+  color: var(--primary);
+}
+
+.attachment-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.attachment-heading,
+.attachment-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.attachment-heading small,
+.attachment-panel > small,
+.attachment-unavailable { color: var(--muted); }
+
+.receipt-preview {
+  width: 100%;
+  max-height: 280px;
+  object-fit: contain;
+  border-radius: 10px;
+  background: var(--bg);
+  cursor: zoom-in;
+}
+
+.file-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  padding: 10px 14px;
+  border: 1px dashed var(--primary);
+  border-radius: 10px;
+  color: var(--primary);
+  cursor: pointer;
+}
+
+.file-button.disabled { opacity: 0.5; cursor: not-allowed; }
+.file-button input { display: none; }
+.attachment-actions > button { flex: 1; width: auto; }
+
+.receipt-viewer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 122px);
+}
+
+.receipt-viewer img {
+  max-width: 100%;
+  max-height: calc(100vh - 150px);
+  object-fit: contain;
+}
 
 /* Buttons */
 .btn-primary, .btn-secondary, .btn-danger, .btn-ghost, .btn-icon {

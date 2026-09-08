@@ -181,6 +181,7 @@
       <button @click="$store.app.setCategoryType('expense')" :class="{ active: $store.app.category.type === 'expense' }">支出</button>
       <button @click="$store.app.setCategoryType('income')" :class="{ active: $store.app.category.type === 'income' }">收入</button>
     </div>
+
     <ul class="card-list">
       <template x-if="$store.app.category.items.length === 0"><li class="empty-state">尚無分類</li></template>
       <template x-for="item in $store.app.category.items" :key="item.Id">
@@ -276,6 +277,21 @@
               :class="{ active: $store.app.filter.type === 'expense' }">Expense</button>
     </div>
 
+    <div class="filter-grid">
+      <select aria-label="Category filter" x-model="$store.app.filter.categoryId"
+              @change="$store.app.setTransactionFilter('categoryId', $event.target.value)">
+        <option value="">所有分類</option>
+        <template x-for="cat in $store.app.filterCategories" :key="cat.Id">
+          <option :value="cat.Id" x-text="cat.Name"></option>
+        </template>
+      </select>
+      <select aria-label="Currency filter" x-model="$store.app.filter.currency"
+              @change="$store.app.setTransactionFilter('currency', $event.target.value)">
+        <option value="all">所有幣別</option>
+        <option value="TWD">TWD</option><option value="USD">USD</option><option value="JPY">JPY</option><option value="EUR">EUR</option>
+      </select>
+    </div>
+
     <!-- Transaction rows -->
     <ul class="tx-list">
       <template x-if="$store.app.transactions.length === 0">
@@ -325,8 +341,9 @@
       <!-- Amount -->
       <div class="form-group">
         <label for="amount">Amount</label>
-        <input id="amount" type="number" inputmode="decimal" step="0.01" min="0"
-               x-model="$store.app.form.amount" placeholder="0.00">
+        <input id="amount" type="text" inputmode="decimal"
+               x-model="$store.app.form.amount" @input="$store.app.onAmountInput($event)"
+               @keydown.enter.prevent="$store.app.focusNextTransactionField('amount')" placeholder="0.00">
         <span class="error" x-text="$store.app.errors.amount"></span>
       </div>
 
@@ -343,8 +360,22 @@
 
       <!-- Category -->
       <div class="form-group">
+        <template x-if="$store.app.frequentCategories.length">
+          <div>
+            <label>常用分類</label>
+            <div class="category-chips">
+              <template x-for="cat in $store.app.frequentCategories" :key="cat.Id">
+                <button type="button" @click="$store.app.selectFrequentCategory(cat)"
+                        :class="{ active: Number($store.app.form.categoryId) === Number(cat.Id) }">
+                  <span x-text="$store.app.iconDisplay(cat.Icon)"></span><span x-text="cat.Name"></span>
+                </button>
+              </template>
+            </div>
+          </div>
+        </template>
         <label for="category">Category</label>
-        <select id="category" x-model="$store.app.form.categoryId">
+        <select id="category" x-model="$store.app.form.categoryId"
+                @change="$store.app.focusNextTransactionField('category')">
           <option value="">Select category…</option>
           <template x-for="cat in $store.app.categories" :key="cat.Id">
             <option :value="cat.Id" x-text="$store.app.iconDisplay(cat.Icon) + ' ' + cat.Name"></option>
@@ -356,7 +387,8 @@
       <!-- Date -->
       <div class="form-group">
         <label for="date">Date</label>
-        <input id="date" type="date" x-model="$store.app.form.date">
+        <input id="date" type="date" x-model="$store.app.form.date"
+               @change="$store.app.focusNextTransactionField('date')">
       </div>
 
       <!-- Note -->
@@ -364,6 +396,31 @@
         <label for="note">Note</label>
         <input id="note" type="text" x-model="$store.app.form.note" placeholder="Optional">
       </div>
+
+      <!-- Local receipt attachment -->
+      <section class="attachment-panel">
+        <div class="attachment-heading"><strong>收據圖片</strong><small>僅儲存在此裝置</small></div>
+        <template x-if="$store.app.attachment.previewUrl">
+          <img class="receipt-preview" :src="$store.app.attachment.previewUrl" alt="Receipt preview"
+               @click="$store.app.openReceiptViewer()">
+        </template>
+        <p class="attachment-unavailable"
+           x-show="$store.app.attachment.persistedPath && !$store.app.attachment.available && !$store.app.attachment.stagedPath">
+          此交易有收據紀錄，但圖片不在這個裝置上。
+        </p>
+        <label class="file-button" :class="{ disabled: !$store.app.receiptSupported || $store.app.attachment.busy }">
+          <span x-text="$store.app.attachment.previewUrl ? '替換圖片' : '拍照或選擇圖片'"></span>
+          <input id="receipt-file" type="file" accept="image/*" capture="environment"
+                 :disabled="!$store.app.receiptSupported || $store.app.attachment.busy"
+                 @change="$store.app.stageReceipt($event)">
+        </label>
+        <div class="attachment-actions" x-show="$store.app.attachment.previewUrl">
+          <button type="button" class="btn-secondary" @click="$store.app.openReceiptViewer()">查看</button>
+          <button type="button" class="btn-ghost" @click="$store.app.removeReceipt()">移除</button>
+        </div>
+        <small x-show="!$store.app.receiptSupported">此瀏覽器不支援 OPFS，因此無法保存收據圖片。</small>
+        <span class="error" x-text="$store.app.attachment.error"></span>
+      </section>
 
       <button type="submit" class="btn-primary">
         <span x-text="$store.app.editTarget ? 'Save Changes' : 'Add Transaction'"></span>
@@ -374,6 +431,10 @@
               @click="$store.app.deleteTransaction()"
               class="btn-danger">Delete</button>
     </form>
+  </main>
+
+  <main x-show="$store.app.currentView === 'receiptViewer'" class="receipt-viewer">
+    <img :src="$store.app.attachment.previewUrl" alt="Receipt image">
   </main>
 
   <!-- Settings View -->
@@ -551,6 +612,7 @@
   <script src="./accounting.js"></script>
   <script src="./app-state.js"></script>
   <script src="./db.js"></script>
+  <script src="./receipts.js"></script>
   <script src="./drive.js"></script>
   <script src="./app.js"></script>
   <script>

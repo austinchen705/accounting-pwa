@@ -26,10 +26,10 @@
 
 ## 5. Enhanced Transactions and Receipts
 
-- [ ] 5.1 Add combined transaction category/currency filters and frequent-category ranking
-- [ ] 5.2 Implement guided amount, category, date, and note input focus behavior
-- [ ] 5.3 Add OPFS receipt import, compression, lookup, deletion, and capability tests
-- [ ] 5.4 Implement staged receipt view, replacement, removal, and unavailable-device states
+- [x] 5.1 Add combined transaction category/currency filters and frequent-category ranking
+- [x] 5.2 Implement guided amount, category, date, and note input focus behavior
+- [x] 5.3 Add OPFS receipt import, compression, lookup, deletion, and capability tests
+- [x] 5.4 Implement staged receipt view, replacement, removal, and unavailable-device states
 
 ## 6. Asset Trend Parity
 

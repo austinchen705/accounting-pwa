@@ -260,6 +260,15 @@
     return Math.round((Number(amount) * rate + Number.EPSILON) * 100) / 100;
   }
 
+  function sanitizeAmount(raw) {
+    let value = String(raw ?? '').replace(/,/g, '').replace(/[^0-9.]/g, '');
+    const dot = value.indexOf('.');
+    if (dot >= 0) value = value.slice(0, dot + 1) + value.slice(dot + 1).replace(/\./g, '');
+    if (value.startsWith('.')) value = `0${value}`;
+    const [whole, decimals] = value.split('.');
+    return decimals === undefined ? whole : `${whole}.${decimals.slice(0, 2)}`;
+  }
+
   return {
     normalizeType,
     moveMonth,
@@ -277,5 +286,6 @@
     niceAxisStep,
     parseAssetCsv,
     convertUsdToTwd,
+    sanitizeAmount,
   };
 });

@@ -164,3 +164,9 @@ test('applies currency rates without mutating source transactions', () => {
   assert.deepEqual(converted.map(row => row.BaseAmount), [300, 20]);
   assert.equal('BaseAmount' in source[0], false);
 });
+
+test('sanitizes transaction amounts to one decimal separator and two decimals', () => {
+  assert.equal(Accounting.sanitizeAmount('NT$ 1,234.567'), '1234.56');
+  assert.equal(Accounting.sanitizeAmount('12..3'), '12.3');
+  assert.equal(Accounting.sanitizeAmount('.5'), '0.5');
+});

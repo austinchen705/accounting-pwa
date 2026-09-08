@@ -92,6 +92,10 @@
     return TITLES[view] || '個人記帳';
   }
 
+  function nextTransactionField(field) {
+    return ({ amount: 'category', category: 'date', date: 'note' })[field] || null;
+  }
+
   return {
     PRIMARY_VIEWS,
     createInitialState,
@@ -101,5 +105,6 @@
     validateBudgetForm,
     budgetProgress,
     viewTitle,
+    nextTransactionField,
   };
 });

@@ -52,3 +52,10 @@ test('provides titles for primary and secondary views', () => {
   assert.equal(AppState.viewTitle('categories'), '分類管理');
   assert.equal(AppState.viewTitle('budgetForm', { editing: true }), '編輯預算');
 });
+
+test('defines the guided transaction input order', () => {
+  assert.equal(AppState.nextTransactionField('amount'), 'category');
+  assert.equal(AppState.nextTransactionField('category'), 'date');
+  assert.equal(AppState.nextTransactionField('date'), 'note');
+  assert.equal(AppState.nextTransactionField('note'), null);
+});

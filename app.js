@@ -8,6 +8,7 @@ let _chart = null;
 let _reportChart = null;
 let _statisticsChart = null;
 let _categoryTrendChart = null;
+let _receiptStore = null;
 const REPORT_COLORS = ['#2563EB', '#16A34A', '#EA580C', '#7C3AED', '#DC2626', '#0891B2', '#CA8A04', '#DB2777'];
 
 document.addEventListener('alpine:init', () => {
@@ -16,13 +17,25 @@ document.addEventListener('alpine:init', () => {
     ...initialState,
     transactions: [],
     categories: [],
+    filterCategories: [],
+    frequentCategories: [],
     editTarget: null,
     formReturnView: 'transactions',
     toast: { message: '', visible: false, _timer: null },
     driveStatus: 'disconnected', // 'disconnected' | 'connected' | 'syncing'
     setup: { clientId: '', clientSecret: '' },
-    form: { amount: '', currency: 'TWD', categoryId: '', date: '', note: '', type: 'expense' },
+    form: { amount: '', currency: 'TWD', categoryId: '', date: '', note: '', type: 'expense', imageRelativePath: null },
     errors: {},
+    receiptSupported: false,
+    attachment: {
+      persistedPath: null,
+      stagedPath: null,
+      previewUrl: null,
+      available: true,
+      removeRequested: false,
+      busy: false,
+      error: '',
+    },
 
     // Asset Trend state
     snapshots: [],
@@ -82,6 +95,8 @@ document.addEventListener('alpine:init', () => {
 
     async goBack() {
       if (this.currentView === 'form') {
+        if (this.attachment.stagedPath && _receiptStore) await _receiptStore.delete(this.attachment.stagedPath);
+        this.releaseReceiptPreview();
         await this.navigate(this.formReturnView);
         return;
       }
@@ -106,6 +121,8 @@ document.addEventListener('alpine:init', () => {
       try {
         this.loading = true;
         await DB.initDB();
+        this.receiptSupported = Receipts.canUseOpfs();
+        if (this.receiptSupported) _receiptStore = Receipts.createReceiptStore(Receipts.createOpfsAdapter());
         this.driveStatus = Drive.isAuthenticated() ? 'connected' : 'disconnected';
         await this.loadHome();
         await this.loadTransactions();
@@ -121,7 +138,106 @@ document.addEventListener('alpine:init', () => {
 
     async loadTransactions() {
       this.categories = DB.getCategories(this.form.type || 'expense');
+      this.filterCategories = DB.getCategories(this.filter.type === 'all' ? 'all' : this.filter.type);
+      if (this.filter.categoryId && !this.filterCategories.some(category => Number(category.Id) === Number(this.filter.categoryId))) {
+        this.filter.categoryId = '';
+      }
       this.transactions = DB.getTransactions(this.filter);
+    },
+
+    async setTransactionFilter(name, value) {
+      this.filter[name] = value;
+      await this.loadTransactions();
+    },
+
+    loadFrequentCategories() {
+      this.frequentCategories = DB.getFrequentCategories(this.form.type, 6);
+    },
+
+    selectFrequentCategory(category) {
+      this.form.categoryId = String(category.Id);
+      this.focusTransactionField('date');
+    },
+
+    focusTransactionField(field) {
+      const id = ({ amount: 'amount', category: 'category', date: 'date', note: 'note' })[field];
+      if (id) setTimeout(() => document.getElementById(id)?.focus(), 0);
+    },
+
+    focusNextTransactionField(field) {
+      const next = AppState.nextTransactionField(field);
+      if (next) this.focusTransactionField(next);
+    },
+
+    onAmountInput(event) {
+      this.form.amount = Accounting.sanitizeAmount(event.target.value);
+      event.target.value = this.form.amount;
+    },
+
+    releaseReceiptPreview() {
+      if (this.attachment.previewUrl) URL.revokeObjectURL(this.attachment.previewUrl);
+      this.attachment.previewUrl = null;
+    },
+
+    async resetAttachment(path = null) {
+      this.releaseReceiptPreview();
+      this.attachment = {
+        persistedPath: path,
+        stagedPath: null,
+        previewUrl: null,
+        available: true,
+        removeRequested: false,
+        busy: false,
+        error: '',
+      };
+      if (path) await this.loadReceiptPreview(path);
+    },
+
+    async loadReceiptPreview(path) {
+      this.releaseReceiptPreview();
+      if (!path || !_receiptStore) {
+        this.attachment.available = !path;
+        return;
+      }
+      const blob = await _receiptStore.read(path);
+      this.attachment.available = Boolean(blob);
+      if (blob) this.attachment.previewUrl = URL.createObjectURL(blob);
+    },
+
+    async stageReceipt(event) {
+      const file = event.target.files?.[0];
+      event.target.value = '';
+      if (!file) return;
+      if (!_receiptStore) {
+        this.attachment.error = '此瀏覽器不支援本機收據儲存。';
+        return;
+      }
+      this.attachment.busy = true;
+      this.attachment.error = '';
+      try {
+        const blob = await Receipts.compressImage(file);
+        const path = await _receiptStore.save(blob);
+        if (this.attachment.stagedPath) await _receiptStore.delete(this.attachment.stagedPath);
+        this.attachment.stagedPath = path;
+        this.attachment.removeRequested = false;
+        await this.loadReceiptPreview(path);
+      } catch (error) {
+        this.attachment.error = error.message;
+      } finally {
+        this.attachment.busy = false;
+      }
+    },
+
+    async removeReceipt() {
+      if (this.attachment.stagedPath && _receiptStore) await _receiptStore.delete(this.attachment.stagedPath);
+      this.attachment.stagedPath = null;
+      this.attachment.removeRequested = Boolean(this.attachment.persistedPath);
+      this.attachment.available = true;
+      this.releaseReceiptPreview();
+    },
+
+    openReceiptViewer() {
+      if (this.attachment.previewUrl) this.currentView = 'receiptViewer';
     },
 
     async getTwdRates(transactions) {
@@ -615,35 +731,41 @@ document.addEventListener('alpine:init', () => {
       this.loadTransactions();
     },
 
-    openAdd() {
+    async openAdd() {
       this.editTarget = null;
       this.formReturnView = 'transactions';
       this.form = {
         amount: '', currency: 'TWD', categoryId: '',
         date: new Date().toISOString().slice(0, 10),
-        note: '', type: 'expense',
+        note: '', type: 'expense', imageRelativePath: null,
       };
       this.errors = {};
       this.categories = DB.getCategories('expense');
+      this.loadFrequentCategories();
       this.currentView = 'form';
+      await this.resetAttachment();
+      this.focusTransactionField('amount');
     },
 
-    openEdit(tx) {
+    async openEdit(tx) {
       this.formReturnView = ['home', 'reportDetail'].includes(this.currentView) ? this.currentView : 'transactions';
       this.editTarget = tx;
       this.form = {
         amount: String(tx.Amount), currency: tx.Currency,
         categoryId: String(tx.CategoryId), date: tx.Date.slice(0, 10),
-        note: tx.Note || '', type: tx.Type,
+        note: tx.Note || '', type: tx.Type, imageRelativePath: tx.ImageRelativePath || null,
       };
       this.errors = {};
       this.categories = DB.getCategories(tx.Type);
+      this.loadFrequentCategories();
       this.currentView = 'form';
+      await this.resetAttachment(tx.ImageRelativePath || null);
     },
 
     onTypeChange() {
       this.form.categoryId = '';
       this.categories = DB.getCategories(this.form.type);
+      this.loadFrequentCategories();
     },
 
     validateForm() {
@@ -659,6 +781,9 @@ document.addEventListener('alpine:init', () => {
 
     async saveTransaction() {
       if (!this.validateForm()) return;
+      const desiredReceiptPath = this.attachment.removeRequested
+        ? null
+        : this.attachment.stagedPath || this.attachment.persistedPath;
       const data = {
         amount: parseFloat(this.form.amount),
         currency: this.form.currency,
@@ -666,12 +791,32 @@ document.addEventListener('alpine:init', () => {
         date: this.form.date,
         note: this.form.note,
         type: this.form.type,
+        imageRelativePath: desiredReceiptPath,
       };
-      if (this.editTarget) {
-        await DB.updateTransaction(this.editTarget.Id, data);
-      } else {
-        await DB.addTransaction(data);
+      const writeMetadata = async () => {
+        if (this.editTarget) await DB.updateTransaction(this.editTarget.Id, data);
+        else await DB.addTransaction(data);
+      };
+      try {
+        if (_receiptStore && this.attachment.persistedPath !== desiredReceiptPath) {
+          await Receipts.commitReplacement(
+            _receiptStore,
+            this.attachment.persistedPath,
+            desiredReceiptPath,
+            writeMetadata,
+          );
+        } else {
+          await writeMetadata();
+        }
+      } catch (error) {
+        this.attachment.stagedPath = null;
+        this.attachment.removeRequested = false;
+        await this.loadReceiptPreview(this.attachment.persistedPath);
+        this.showToast(`儲存失敗：${error.message}`);
+        return;
       }
+      this.attachment.persistedPath = desiredReceiptPath;
+      this.attachment.stagedPath = null;
       await this.loadTransactions();
       await this.loadHome();
       await this.loadBudgets();
@@ -687,7 +832,15 @@ document.addEventListener('alpine:init', () => {
 
     async deleteTransaction() {
       if (!confirm('Delete this transaction?')) return;
-      await DB.deleteTransaction(this.editTarget.Id);
+      const receiptPaths = [this.attachment.persistedPath, this.attachment.stagedPath].filter(Boolean);
+      try {
+        await DB.deleteTransaction(this.editTarget.Id);
+        if (_receiptStore) await Promise.all(receiptPaths.map(path => _receiptStore.delete(path)));
+      } catch (error) {
+        this.showToast(`刪除失敗：${error.message}`);
+        return;
+      }
+      this.releaseReceiptPreview();
       await this.loadTransactions();
       await this.loadHome();
       await this.loadBudgets();
