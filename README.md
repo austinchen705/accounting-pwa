@@ -1,93 +1,120 @@
-# accounting-pwa
+# Accounting PWA
 
+Mobile-first, offline-capable accounting PWA that shares `accounting_backup.db` with the .NET MAUI `accounting-app`. It is a static Alpine.js application: there is no backend and no build step.
 
+## Features
 
-## Getting started
+- Monthly home summary and recent activity
+- Transaction entry, combined filters, frequent categories, and local receipt images
+- Rolling 12-month statistics and expense-category reports with drill-down
+- Income/expense category management and monthly budgets
+- Asset snapshots, USD FirstTrade conversion, CSV import, and responsive charts
+- Google Drive backup/restore using the shared MAUI SQLite file
+- Service Worker precache for offline reload
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+Receipt image bytes are local to the current browser/device. Only `Transactions.ImageRelativePath` is included in the shared database, so another device can retain the path while showing that the image is unavailable locally.
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+## Run locally
 
-## Add your files
+Requirements: a recent Chromium, Edge, or Safari browser, Node.js for tests, and Python only for the example static server.
 
-* [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
-
+```powershell
+cd D:\Repository\Poc\accounting-pwa
+py -m http.server 8080 --bind 127.0.0.1
 ```
-cd existing_repo
-git remote add origin https://hs-gitlab.higgstar.com/austin_poc/accounting-pwa.git
-git branch -M master
-git push -uf origin master
+
+Open <http://127.0.0.1:8080/>. Do not open `index.html` directly with `file://`; sql.js, OPFS, and the Service Worker require an HTTP origin.
+
+Browser storage is isolated by origin. For example, ports `8080` and `8081` have separate databases, which is useful for testing without touching another local copy or the deployed site.
+
+### Load a database locally without Google OAuth
+
+Open browser DevTools on the local page, select Console, and run:
+
+```js
+const picker = Object.assign(document.createElement('input'), { type: 'file', accept: '.db' });
+picker.onchange = async () => {
+  const bytes = new Uint8Array(await picker.files[0].arrayBuffer());
+  await DB.loadFromBytes(bytes);
+  location.reload();
+};
+picker.click();
 ```
 
-## Integrate with your tools
+Choose a copy of `accounting_backup.db`. The restored bytes are migrated idempotently and saved into that origin's OPFS storage.
 
-* [Set up project integrations](https://hs-gitlab.higgstar.com/austin_poc/accounting-pwa/-/settings/integrations)
+To download the current local database from DevTools:
 
-## Collaborate with your team
+```js
+const url = URL.createObjectURL(new Blob([_dbExportBytes()], { type: 'application/octet-stream' }));
+const link = Object.assign(document.createElement('a'), { href: url, download: 'accounting_backup.db' });
+link.click();
+setTimeout(() => URL.revokeObjectURL(url), 1000);
+```
 
-* [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+Keep a separate backup before testing restore or replacement imports. Local receipt files are not embedded in this database export.
 
-## Test and Deploy
+## Tests
 
-Use the built-in continuous integration in GitLab.
+Run the full Node suite:
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+```powershell
+node --test tests/*.test.js
+```
 
-***
+Run JavaScript syntax checks:
 
-# Editing this README
+```powershell
+node --check accounting.js
+node --check app-state.js
+node --check receipts.js
+node --check db.js
+node --check drive.js
+node --check app.js
+node --check sw.js
+```
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+Validate the active OpenSpec change:
 
-## Suggestions for a good README
+```powershell
+openspec validate accounting-workflow-parity --strict
+```
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+For UI validation, serve the repository over HTTP and exercise the app at mobile and desktop widths. Settings includes **Reset Service Worker (force refresh)**, which clears cached application files without deleting the OPFS database.
 
-## Name
-Choose a self-explaining name for your project.
+## Architecture
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+| File | Responsibility |
+|---|---|
+| `index.html` | Alpine SPA shell and all views |
+| `app.js` | Application state, navigation, workflow coordination, and charts |
+| `app-state.js` | Pure state/validation helpers |
+| `accounting.js` | Pure accounting, report, statistics, CSV, and asset calculations |
+| `db.js` | sql.js schema, MAUI-compatible repository, OPFS persistence, and restore |
+| `receipts.js` | Image compression and local OPFS receipt lifecycle |
+| `drive.js` | Google OAuth and Drive backup/restore |
+| `sw.js` | Cache-first offline application shell |
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+All runtime libraries are vendored under `vendor/`, so an installed PWA can reload offline.
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+## Shared SQLite contract
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+The shared schema is additive and retains MAUI names and representations:
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+```text
+Transactions      Id, Amount, Currency, CategoryId, Date, Note, Type, ImageRelativePath
+Categories        Id, Name, Icon, Type
+Budgets           Id, CategoryId, Amount, Month
+ExchangeRateCache BaseCurrency, RatesJson, UpdatedAt
+AssetSnapshot     Id, Date, Stock, Cash, FirstTrade, Property
+```
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+Shared date values use .NET ticks (`INTEGER`). Every successful mutation exports and persists the complete SQLite binary. Both initialization and restore run the same idempotent migrations.
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+Google Drive uses folder `personaccount_backup` and filename `accounting_backup.db`. Configure the OAuth client ID and client secret in Settings; values stay in that browser's local storage and must never be committed.
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+## Deployment
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+The application is designed for HTTPS static hosting such as GitHub Pages. When a cached runtime file changes, increment `CACHE` in `sw.js` and include any new runtime file in `PRECACHE`.
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+Repository remotes currently use GitLab as the primary review repository and GitHub for Pages deployment. Merge through the normal review workflow, then mirror the accepted `master` branch to GitHub.

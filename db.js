@@ -300,8 +300,9 @@
       } else {
         database.run('INSERT INTO Budgets (CategoryId, Amount, Month) VALUES (?, ?, ?)', [categoryId, amount, month]);
       }
+      const id = existing?.Id || queryObjects('SELECT last_insert_rowid() AS Id')[0].Id;
       await persist();
-      return { id: existing?.Id || queryObjects('SELECT last_insert_rowid() AS Id')[0].Id };
+      return { id };
     }
 
     async function deleteBudget(id) {

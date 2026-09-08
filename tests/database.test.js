@@ -110,3 +110,69 @@ test('round-trips exchange cache and replaces snapshots explicitly', async () =>
   await api.importSnapshots([{ date: '2026-09-02', stock: 5, cash: 6, firstTrade: 7, property: 8 }], true);
   assert.deepEqual(api.getSnapshots().map(row => row.Date), ['2026-09-02']);
 });
+
+test('round-trips and mutates every MAUI shared entity without changing IDs or receipt metadata', async () => {
+  const source = new SQL.Database();
+  const first = createDatabaseApi(source);
+  await first.runMigrations();
+  const category = await first.addCategory({ name: 'Round trip', icon: 'cat_other.png', type: 'expense' });
+  const transaction = await first.addTransaction({
+    amount: 12.5,
+    currency: 'USD',
+    categoryId: category.id,
+    date: '2026-09-08',
+    note: 'source',
+    type: 'expense',
+    imageRelativePath: 'receipts/2026/09/missing.jpg',
+  });
+  const budget = await first.upsertBudget({ categoryId: category.id, amount: 100, month: '2026-09' });
+  await first.setExchangeRates('USD', { TWD: 30.5 }, '2026-09-08T12:00:00Z');
+  const snapshot = await first.addOrReplaceSnapshotByDate({ date: '2026-09-08', stock: 1, cash: 2, firstTrade: 3, property: 4 });
+
+  const restoredRaw = new SQL.Database(first.exportBytes());
+  const restored = createDatabaseApi(restoredRaw);
+  await restored.runMigrations();
+  assert.equal(restored.queryObjects('SELECT Date FROM Transactions WHERE Id = ?', [transaction.id])[0].Date, ticksFromIsoDate('2026-09-08'));
+  assert.equal(restored.getTransactions({})[0].ImageRelativePath, 'receipts/2026/09/missing.jpg');
+  assert.equal(restored.getBudgetsWithSpending('2026-09')[0].Id, budget.id);
+  assert.equal(restored.getSnapshots()[0].Id, snapshot.id);
+  assert.equal(restored.getExchangeRates('USD').rates.TWD, 30.5);
+
+  await restored.updateCategory(category.id, { name: 'Round trip updated', icon: 'cat_other.png', type: 'expense' });
+  await restored.updateTransaction(transaction.id, {
+    amount: 25,
+    currency: 'TWD',
+    categoryId: category.id,
+    date: '2026-09-09',
+    note: 'restored',
+    type: 'expense',
+    imageRelativePath: 'receipts/2026/09/missing.jpg',
+  });
+  await restored.upsertBudget({ categoryId: category.id, amount: 200, month: '2026-09' });
+  await restored.setExchangeRates('USD', { TWD: 31 }, '2026-09-09T12:00:00Z');
+  await restored.updateSnapshot(snapshot.id, { date: '2026-09-09', stock: 5, cash: 6, firstTrade: 7, property: 8 });
+
+  const reopenedRaw = new SQL.Database(restored.exportBytes());
+  const reopened = createDatabaseApi(reopenedRaw);
+  await reopened.runMigrations();
+  assert.deepEqual(reopened.getCategories('expense').find(row => row.Id === category.id), {
+    Id: category.id, Name: 'Round trip updated', Icon: 'cat_other.png', Type: 'expense',
+  });
+  assert.deepEqual(reopened.getTransactions({}).find(row => row.Id === transaction.id), {
+    Id: transaction.id,
+    Amount: 25,
+    Currency: 'TWD',
+    CategoryId: category.id,
+    Date: '2026-09-09',
+    Note: 'restored',
+    Type: 'expense',
+    ImageRelativePath: 'receipts/2026/09/missing.jpg',
+    CategoryName: 'Round trip updated',
+    CategoryIcon: 'cat_other.png',
+  });
+  assert.equal(reopened.getBudgetsWithSpending('2026-09')[0].Amount, 200);
+  assert.equal(reopened.getExchangeRates('USD').rates.TWD, 31);
+  assert.deepEqual(reopened.getSnapshots()[0], {
+    Id: snapshot.id, Date: '2026-09-09', Stock: 5, Cash: 6, FirstTrade: 7, Property: 8,
+  });
+});

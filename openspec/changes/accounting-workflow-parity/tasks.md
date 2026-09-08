@@ -40,8 +40,8 @@
 
 ## 7. Offline Delivery and Verification
 
-- [ ] 7.1 Add all runtime modules to the document and service-worker precache and bump the cache version
-- [ ] 7.2 Run the complete Node test suite and JavaScript syntax checks
-- [ ] 7.3 Exercise the primary workflows against a local static server at mobile and desktop widths
-- [ ] 7.4 Verify PWA backup/restore and MAUI-compatible SQLite round trips, including missing local receipts
-- [ ] 7.5 Update project documentation and mark the OpenSpec checklist complete
+- [x] 7.1 Add all runtime modules to the document and service-worker precache and bump the cache version
+- [x] 7.2 Run the complete Node test suite and JavaScript syntax checks
+- [x] 7.3 Exercise the primary workflows against a local static server at mobile and desktop widths
+- [x] 7.4 Verify PWA backup/restore and MAUI-compatible SQLite round trips, including missing local receipts
+- [x] 7.5 Update project documentation and mark the OpenSpec checklist complete

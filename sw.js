@@ -1,4 +1,4 @@
-const CACHE = 'accounting-v8';
+const CACHE = 'accounting-v9';
 const PRECACHE = [
   './',
   './index.html',
