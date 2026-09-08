@@ -186,15 +186,30 @@ test('builds zero-filled twelve-month income expense and balance stats', () => {
   ]);
 });
 
+test('builds income expense and balance chart datasets', () => {
+  const datasets = Accounting.monthTrendDatasets([
+    { income: 100, expense: 25, balance: 75 },
+    { income: 50, expense: 80, balance: -30 },
+  ]);
+  assert.deepEqual(datasets.map(dataset => [dataset.label, dataset.data]), [
+    ['收入', [100, 50]],
+    ['支出', [25, 80]],
+    ['結餘', [75, -30]],
+  ]);
+});
+
 test('builds MAUI-compatible trend insights', () => {
   assert.deepEqual(Accounting.trendInsights([
     { month: '2026-08', income: 100, expense: 20 },
     { month: '2026-09', income: 150, expense: 40 },
-  ]), {
+  ], [{ categoryName: '餐飲', total: 60 }]), {
     incomeMoM: '+50.0 %',
     expenseMoM: '+100.0 %',
     maxExpense: '最高支出月：2026-09 (40)',
     minNet: '最低淨額月：2026-08 (80)',
+    averageIncome: '平均收入：125',
+    averageExpense: '平均支出：30',
+    dominantCategory: '主要支出分類：餐飲 (60)',
   });
   assert.equal(Accounting.trendInsights([{ month: '2026-09', income: 0, expense: 0 }]).incomeMoM, '--');
 });

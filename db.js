@@ -29,8 +29,10 @@
     return new Date(milliseconds).toISOString();
   }
 
-  function createDatabaseApi(database, persistCallback = async () => {}) {
-    if (!database) throw new TypeError('A sql.js Database instance is required.');
+  function createDatabaseApi(initialDatabase, persistCallback = async () => {}) {
+    if (!initialDatabase) throw new TypeError('A sql.js Database instance is required.');
+    let database = initialDatabase;
+    const DatabaseConstructor = initialDatabase.constructor;
 
     const queryObjects = (sql, params = []) => {
       const results = database.exec(sql, params);
@@ -40,6 +42,19 @@
     };
 
     const persist = async () => persistCallback(database.export());
+
+    async function commitMutation(operation) {
+      const before = database.export();
+      try {
+        const result = operation();
+        await persist();
+        return result;
+      } catch (error) {
+        database.close();
+        database = new DatabaseConstructor(before);
+        throw error;
+      }
+    }
 
     async function runMigrations() {
       database.run('BEGIN');
@@ -158,18 +173,28 @@
       const cleanName = String(name || '').trim();
       if (!cleanName) throw new Error('Category name is required.');
       ensureCategoryUnique(cleanName, type);
-      database.run('INSERT INTO Categories (Name, Icon, Type) VALUES (?, ?, ?)', [cleanName, icon, type]);
-      const id = queryObjects('SELECT last_insert_rowid() AS Id')[0].Id;
-      await persist();
-      return { id };
+      return commitMutation(() => {
+        database.run('INSERT INTO Categories (Name, Icon, Type) VALUES (?, ?, ?)', [cleanName, icon, type]);
+        const id = queryObjects('SELECT last_insert_rowid() AS Id')[0].Id;
+        return { id };
+      });
     }
 
     async function updateCategory(id, { name, icon = 'cat_other.png', type = 'expense' }) {
       const cleanName = String(name || '').trim();
       if (!cleanName) throw new Error('Category name is required.');
       ensureCategoryUnique(cleanName, type, id);
-      database.run('UPDATE Categories SET Name = ?, Icon = ?, Type = ? WHERE Id = ?', [cleanName, icon, type, id]);
-      await persist();
+      return commitMutation(() => {
+        database.run('BEGIN');
+        try {
+          database.run('UPDATE Categories SET Name = ?, Icon = ?, Type = ? WHERE Id = ?', [cleanName, icon, type, id]);
+          database.run('UPDATE Transactions SET Type = ? WHERE CategoryId = ?', [type, id]);
+          database.run('COMMIT');
+        } catch (error) {
+          database.run('ROLLBACK');
+          throw error;
+        }
+      });
     }
 
     async function deleteCategory(id) {
@@ -179,8 +204,7 @@
           (SELECT COUNT(*) FROM Budgets WHERE CategoryId = ?) AS BudgetCount
       `, [id, id])[0];
       if (usage.TransactionCount || usage.BudgetCount) throw new Error('Category is used by transactions or budgets.');
-      database.run('DELETE FROM Categories WHERE Id = ?', [id]);
-      await persist();
+      return commitMutation(() => database.run('DELETE FROM Categories WHERE Id = ?', [id]));
     }
 
     const transactionDateSql = alias => `CASE WHEN typeof(${alias}.Date) = 'integer' THEN date(datetime((${alias}.Date - ${DOTNET_UNIX_EPOCH_TICKS}) / 10000000, 'unixepoch')) ELSE date(${alias}.Date) END`;
@@ -254,27 +278,26 @@
     }
 
     async function addTransaction({ amount, currency = 'TWD', categoryId, date, note = '', type = 'expense', imageRelativePath = null }) {
-      database.run(`
-        INSERT INTO Transactions (Amount, Currency, CategoryId, Date, Note, Type, ImageRelativePath)
-        VALUES (?, ?, ?, ${DATE_TO_TICKS_EXPR}, ?, ?, ?)
-      `, [amount, currency, categoryId, date, note, type, imageRelativePath]);
-      const id = queryObjects('SELECT last_insert_rowid() AS Id')[0].Id;
-      await persist();
-      return { id };
+      return commitMutation(() => {
+        database.run(`
+          INSERT INTO Transactions (Amount, Currency, CategoryId, Date, Note, Type, ImageRelativePath)
+          VALUES (?, ?, ?, ${DATE_TO_TICKS_EXPR}, ?, ?, ?)
+        `, [amount, currency, categoryId, date, note, type, imageRelativePath]);
+        const id = queryObjects('SELECT last_insert_rowid() AS Id')[0].Id;
+        return { id };
+      });
     }
 
     async function updateTransaction(id, { amount, currency = 'TWD', categoryId, date, note = '', type = 'expense', imageRelativePath = null }) {
-      database.run(`
-        UPDATE Transactions
-        SET Amount = ?, Currency = ?, CategoryId = ?, Date = ${DATE_TO_TICKS_EXPR}, Note = ?, Type = ?, ImageRelativePath = ?
-        WHERE Id = ?
-      `, [amount, currency, categoryId, date, note, type, imageRelativePath, id]);
-      await persist();
+      return commitMutation(() => database.run(`
+          UPDATE Transactions
+          SET Amount = ?, Currency = ?, CategoryId = ?, Date = ${DATE_TO_TICKS_EXPR}, Note = ?, Type = ?, ImageRelativePath = ?
+          WHERE Id = ?
+        `, [amount, currency, categoryId, date, note, type, imageRelativePath, id]));
     }
 
     async function deleteTransaction(id) {
-      database.run('DELETE FROM Transactions WHERE Id = ?', [id]);
-      await persist();
+      return commitMutation(() => database.run('DELETE FROM Transactions WHERE Id = ?', [id]));
     }
 
     function getBudgetsWithSpending(month) {
@@ -295,19 +318,19 @@
     async function upsertBudget({ categoryId, amount, month }) {
       if (!(Number(amount) > 0)) throw new Error('Budget amount must be positive.');
       const existing = queryObjects('SELECT Id FROM Budgets WHERE CategoryId = ? AND Month = ? ORDER BY Id LIMIT 1', [categoryId, month])[0];
-      if (existing) {
-        database.run('UPDATE Budgets SET Amount = ? WHERE Id = ?', [amount, existing.Id]);
-      } else {
-        database.run('INSERT INTO Budgets (CategoryId, Amount, Month) VALUES (?, ?, ?)', [categoryId, amount, month]);
-      }
-      const id = existing?.Id || queryObjects('SELECT last_insert_rowid() AS Id')[0].Id;
-      await persist();
-      return { id };
+      return commitMutation(() => {
+        if (existing) {
+          database.run('UPDATE Budgets SET Amount = ? WHERE Id = ?', [amount, existing.Id]);
+        } else {
+          database.run('INSERT INTO Budgets (CategoryId, Amount, Month) VALUES (?, ?, ?)', [categoryId, amount, month]);
+        }
+        const id = existing?.Id || queryObjects('SELECT last_insert_rowid() AS Id')[0].Id;
+        return { id };
+      });
     }
 
     async function deleteBudget(id) {
-      database.run('DELETE FROM Budgets WHERE Id = ?', [id]);
-      await persist();
+      return commitMutation(() => database.run('DELETE FROM Budgets WHERE Id = ?', [id]));
     }
 
     function getExchangeRates(baseCurrency = 'TWD') {
@@ -317,11 +340,10 @@
     }
 
     async function setExchangeRates(baseCurrency, rates, updatedAt = new Date().toISOString()) {
-      database.run(`
-        INSERT INTO ExchangeRateCache (BaseCurrency, RatesJson, UpdatedAt) VALUES (?, ?, ?)
-        ON CONFLICT(BaseCurrency) DO UPDATE SET RatesJson = excluded.RatesJson, UpdatedAt = excluded.UpdatedAt
-      `, [baseCurrency, JSON.stringify(rates), ticksFromIsoDateTime(updatedAt)]);
-      await persist();
+      return commitMutation(() => database.run(`
+          INSERT INTO ExchangeRateCache (BaseCurrency, RatesJson, UpdatedAt) VALUES (?, ?, ?)
+          ON CONFLICT(BaseCurrency) DO UPDATE SET RatesJson = excluded.RatesJson, UpdatedAt = excluded.UpdatedAt
+        `, [baseCurrency, JSON.stringify(rates), ticksFromIsoDateTime(updatedAt)]));
     }
 
     function getSnapshots() {
@@ -345,38 +367,37 @@
     }
 
     async function addOrReplaceSnapshotByDate(snapshot) {
-      const result = upsertSnapshotWithoutPersist(snapshot);
-      await persist();
-      return result;
+      return commitMutation(() => upsertSnapshotWithoutPersist(snapshot));
     }
 
     async function updateSnapshot(id, { date, stock = 0, cash = 0, firstTrade = 0, property = 0 }) {
-      database.run(`UPDATE AssetSnapshot SET Date = ${DATE_TO_TICKS_EXPR}, Stock = ?, Cash = ?, FirstTrade = ?, Property = ? WHERE Id = ?`, [date, stock, cash, firstTrade, property, id]);
-      await persist();
+      return commitMutation(() => database.run(`UPDATE AssetSnapshot SET Date = ${DATE_TO_TICKS_EXPR}, Stock = ?, Cash = ?, FirstTrade = ?, Property = ? WHERE Id = ?`, [date, stock, cash, firstTrade, property, id]));
     }
 
     async function deleteSnapshot(id) {
-      database.run('DELETE FROM AssetSnapshot WHERE Id = ?', [id]);
-      await persist();
+      return commitMutation(() => database.run('DELETE FROM AssetSnapshot WHERE Id = ?', [id]));
     }
 
     async function importSnapshots(snapshots, replace = false) {
-      database.run('BEGIN');
-      try {
-        if (replace) database.run('DELETE FROM AssetSnapshot');
-        for (const snapshot of snapshots) upsertSnapshotWithoutPersist(snapshot);
-        database.run('COMMIT');
-      } catch (error) {
-        database.run('ROLLBACK');
-        throw error;
-      }
-      await persist();
+      return commitMutation(() => {
+        database.run('BEGIN');
+        try {
+          if (replace) database.run('DELETE FROM AssetSnapshot');
+          for (const snapshot of snapshots) upsertSnapshotWithoutPersist(snapshot);
+          database.run('COMMIT');
+        } catch (error) {
+          database.run('ROLLBACK');
+          throw error;
+        }
+      });
     }
 
     return {
       runMigrations,
       queryObjects,
+      rawExec: sql => database.exec(sql),
       exportBytes: () => database.export(),
+      close: () => database.close(),
       getCategories,
       addCategory,
       updateCategory,
@@ -401,8 +422,21 @@
     };
   }
 
+  async function prepareDatabaseReplacement(SqlModule, bytes, persistCallback = async () => {}) {
+    let candidate;
+    try {
+      candidate = new SqlModule.Database(bytes);
+      const api = createDatabaseApi(candidate, persistCallback);
+      await api.runMigrations();
+      await persistCallback(candidate.export());
+      return { database: candidate, api };
+    } catch (error) {
+      candidate?.close();
+      throw error;
+    }
+  }
+
   let SQL;
-  let rawDatabase;
   let browserApi;
   let useOpfs = false;
 
@@ -440,7 +474,7 @@
     localStorage.setItem(key, btoa(binary));
   }
 
-  async function persistBrowserBytes(bytes = rawDatabase.export()) {
+  async function persistBrowserBytes(bytes) {
     if (useOpfs) await opfsSave('accounting_backup.db', bytes);
     else localStorageSave('accounting_db', bytes);
   }
@@ -449,18 +483,17 @@
     useOpfs = Boolean(root.navigator?.storage && 'getDirectory' in root.navigator.storage);
     SQL = await root.initSqlJs({ locateFile: file => `./vendor/${file}` });
     const bytes = useOpfs ? await opfsLoad('accounting_backup.db') : localStorageLoad('accounting_db');
-    rawDatabase = bytes ? new SQL.Database(bytes) : new SQL.Database();
-    browserApi = createDatabaseApi(rawDatabase, persistBrowserBytes);
+    const database = bytes ? new SQL.Database(bytes) : new SQL.Database();
+    browserApi = createDatabaseApi(database, persistBrowserBytes);
     await browserApi.runMigrations();
-    await persistBrowserBytes();
+    await persistBrowserBytes(browserApi.exportBytes());
   }
 
   async function loadFromBytes(bytes) {
-    rawDatabase?.close();
-    rawDatabase = new SQL.Database(bytes);
-    browserApi = createDatabaseApi(rawDatabase, persistBrowserBytes);
-    await browserApi.runMigrations();
-    await persistBrowserBytes();
+    const previous = browserApi;
+    const replacement = await prepareDatabaseReplacement(SQL, bytes, persistBrowserBytes);
+    browserApi = replacement.api;
+    previous?.close();
   }
 
   const browserFacade = { initDB, loadFromBytes };
@@ -474,10 +507,10 @@
   ]) browserFacade[name] = (...args) => browserApi[name](...args);
 
   if (typeof module === 'object' && module.exports) {
-    module.exports = { createDatabaseApi, ticksFromIsoDate, isoDateFromTicks };
+    module.exports = { createDatabaseApi, prepareDatabaseReplacement, ticksFromIsoDate, isoDateFromTicks };
   } else {
     root.DB = browserFacade;
-    root._dbExportBytes = () => rawDatabase.export();
-    root._dbQuery = sql => rawDatabase.exec(sql);
+    root._dbExportBytes = () => browserApi.exportBytes();
+    root._dbQuery = sql => browserApi.rawExec(sql);
   }
 })(typeof globalThis !== 'undefined' ? globalThis : this);

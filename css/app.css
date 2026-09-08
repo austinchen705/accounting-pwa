@@ -603,7 +603,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   .summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .summary-card.balance-card { grid-column: auto; }
   .menu-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .insight-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .insight-grid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 }
 
 @media (max-width: 480px) {

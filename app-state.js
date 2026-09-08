@@ -25,8 +25,8 @@
   });
 
   const pad2 = value => String(value).padStart(2, '0');
-  const localDate = date => `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
-  const localMonth = date => localDate(date).slice(0, 7);
+  const localIsoDate = date => `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+  const localMonth = date => localIsoDate(date).slice(0, 7);
 
   function createInitialState(now = new Date()) {
     const month = localMonth(now);
@@ -38,7 +38,7 @@
       filter: { month, type: 'all', categoryId: '', currency: 'all' },
       budget: { month, items: [], editTarget: null, form: { categoryId: '', amount: '' }, errors: {} },
       category: { type: 'expense', items: [], editTarget: null, form: { name: '', icon: 'cat_other.png', type: 'expense' }, errors: {} },
-      report: { range: 'month', anchorDate: localDate(now), selectedCategoryId: null },
+      report: { range: 'month', anchorDate: localIsoDate(now), selectedCategoryId: null },
       statisticsState: { anchorMonth: month, selectedCategoryId: '' },
     };
   }
@@ -99,6 +99,7 @@
 
   return {
     PRIMARY_VIEWS,
+    localIsoDate,
     createInitialState,
     backView,
     isPrimaryView,

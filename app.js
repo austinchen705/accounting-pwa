@@ -1,9 +1,5 @@
 // app.js — Alpine.store('app') global state and methods
 
-function currentMonth() {
-  return new Date().toISOString().slice(0, 7); // 'YYYY-MM'
-}
-
 let _chart = null;
 let _assetDetailChart = null;
 let _reportChart = null;
@@ -68,7 +64,10 @@ document.addEventListener('alpine:init', () => {
       ...initialState.statisticsState,
       months: [],
       monthly: [],
-      insights: { incomeMoM: '--', expenseMoM: '--', maxExpense: '--', minNet: '--' },
+      insights: {
+        incomeMoM: '--', expenseMoM: '--', maxExpense: '--', minNet: '--',
+        averageIncome: '平均收入：--', averageExpense: '平均支出：--', dominantCategory: '主要支出分類：--',
+      },
       categorySeries: [],
       expenseCategories: [],
     },
@@ -346,9 +345,9 @@ document.addEventListener('alpine:init', () => {
         ? null : Number(this.statisticsState.selectedCategoryId);
       this.statisticsState.months = months;
       this.statisticsState.monthly = monthly;
-      this.statisticsState.insights = Accounting.trendInsights(monthly);
       this.statisticsState.expenseCategories = DB.getCategories('expense');
       this.statisticsState.categorySeries = Accounting.categoryTrendSeries(categoryRows, months, selected, 5);
+      this.statisticsState.insights = Accounting.trendInsights(monthly, this.statisticsState.categorySeries);
       requestAnimationFrame(() => setTimeout(() => this.renderStatisticsCharts(), 0));
     },
 
@@ -371,15 +370,20 @@ document.addEventListener('alpine:init', () => {
 
       const monthly = this.statisticsState.monthly;
       if (monthlyCanvas && monthly.some(row => row.income || row.expense)) {
-        const values = monthly.flatMap(row => [row.income, row.expense]);
+        const datasets = Accounting.monthTrendDatasets(monthly);
+        const colors = ['#16A34A', '#DC2626', '#2563EB'];
+        const values = datasets.flatMap(dataset => dataset.data);
         _statisticsChart = new Chart(monthlyCanvas, {
           type: 'line',
           data: {
             labels: this.statisticsState.months.map(month => month.slice(5)),
-            datasets: [
-              { label: '收入', data: monthly.map(row => row.income), borderColor: '#16A34A', backgroundColor: '#16A34A', tension: 0, pointRadius: 3 },
-              { label: '支出', data: monthly.map(row => row.expense), borderColor: '#DC2626', backgroundColor: '#DC2626', tension: 0, pointRadius: 3 },
-            ],
+            datasets: datasets.map((dataset, index) => ({
+              ...dataset,
+              borderColor: colors[index],
+              backgroundColor: colors[index],
+              tension: 0,
+              pointRadius: 3,
+            })),
           },
           options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { stepSize: Accounting.niceAxisStep(values) } } } },
         });
@@ -556,7 +560,7 @@ document.addEventListener('alpine:init', () => {
     async openSnapshotAdd() {
       this.snapshotEditTarget = null;
       this.snapshotForm = {
-        date: new Date().toISOString().slice(0, 10),
+        date: AppState.localIsoDate(new Date()),
         stock: '', cash: '', firstTrade: '', property: '',
       };
       this.snapshotErrors = {};
@@ -843,7 +847,7 @@ document.addEventListener('alpine:init', () => {
       this.formReturnView = 'transactions';
       this.form = {
         amount: '', currency: 'TWD', categoryId: '',
-        date: new Date().toISOString().slice(0, 10),
+        date: AppState.localIsoDate(new Date()),
         note: '', type: 'expense', imageRelativePath: null,
       };
       this.errors = {};
@@ -924,6 +928,7 @@ document.addEventListener('alpine:init', () => {
       }
       this.attachment.persistedPath = desiredReceiptPath;
       this.attachment.stagedPath = null;
+      this.releaseReceiptPreview();
       await this.loadTransactions();
       await this.loadHome();
       await this.loadBudgets();

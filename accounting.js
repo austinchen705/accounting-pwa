@@ -187,8 +187,19 @@
     return `${ratio >= 0 ? '+' : ''}${ratio.toFixed(1)} %`;
   }
 
-  function trendInsights(stats) {
-    if (!stats?.length) return { incomeMoM: '--', expenseMoM: '--', maxExpense: '--', minNet: '--' };
+  function monthTrendDatasets(stats) {
+    return [
+      { label: '收入', data: (stats || []).map(row => Number(row.income || 0)) },
+      { label: '支出', data: (stats || []).map(row => Number(row.expense || 0)) },
+      { label: '結餘', data: (stats || []).map(row => Number(row.balance ?? Number(row.income || 0) - Number(row.expense || 0))) },
+    ];
+  }
+
+  function trendInsights(stats, categorySeries = []) {
+    if (!stats?.length) return {
+      incomeMoM: '--', expenseMoM: '--', maxExpense: '--', minNet: '--',
+      averageIncome: '平均收入：--', averageExpense: '平均支出：--', dominantCategory: '主要支出分類：--',
+    };
     const latest = stats.at(-1);
     const previous = stats.at(-2);
     let maxExpense = stats[0];
@@ -198,11 +209,19 @@
       if ((row.income - row.expense) < (minNet.income - minNet.expense)) minNet = row;
     }
     const number = value => Number(value).toLocaleString('en-US', { maximumFractionDigits: 0 });
+    const averageIncome = stats.reduce((sum, row) => sum + Number(row.income || 0), 0) / stats.length;
+    const averageExpense = stats.reduce((sum, row) => sum + Number(row.expense || 0), 0) / stats.length;
+    const dominant = categorySeries[0];
     return {
       incomeMoM: previous ? formatMonthChange(previous.income, latest.income) : '--',
       expenseMoM: previous ? formatMonthChange(previous.expense, latest.expense) : '--',
       maxExpense: `最高支出月：${maxExpense.month} (${number(maxExpense.expense)})`,
       minNet: `最低淨額月：${minNet.month} (${number(minNet.income - minNet.expense)})`,
+      averageIncome: `平均收入：${number(averageIncome)}`,
+      averageExpense: `平均支出：${number(averageExpense)}`,
+      dominantCategory: dominant
+        ? `主要支出分類：${dominant.categoryName} (${number(dominant.total)})`
+        : '主要支出分類：--',
     };
   }
 
@@ -337,6 +356,7 @@
     expenseCategoryReport,
     categoryTrendSeries,
     monthTrendStats,
+    monthTrendDatasets,
     trendInsights,
     groupTransactionsByDate,
     applyCurrencyRates,

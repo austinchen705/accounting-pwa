@@ -61,3 +61,13 @@ test('defines the guided transaction input order', () => {
   assert.equal(AppState.nextTransactionField('date'), 'note');
   assert.equal(AppState.nextTransactionField('note'), null);
 });
+
+test('formats new-record dates from local calendar fields instead of UTC', () => {
+  const boundaryDate = {
+    getFullYear: () => 2026,
+    getMonth: () => 8,
+    getDate: () => 9,
+    toISOString: () => '2026-09-08T16:30:00.000Z',
+  };
+  assert.equal(AppState.localIsoDate(boundaryDate), '2026-09-09');
+});

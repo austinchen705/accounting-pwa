@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 
 const initSqlJs = require('../vendor/sql-wasm.js');
-const { createDatabaseApi, ticksFromIsoDate } = require('../db.js');
+const { createDatabaseApi, prepareDatabaseReplacement, ticksFromIsoDate } = require('../db.js');
 
 let SQL;
 
@@ -175,4 +175,77 @@ test('round-trips and mutates every MAUI shared entity without changing IDs or r
   assert.deepEqual(reopened.getSnapshots()[0], {
     Id: snapshot.id, Date: '2026-09-09', Stock: 5, Cash: 6, FirstTrade: 7, Property: 8,
   });
+});
+
+test('changing a category type updates its related transaction types atomically', async () => {
+  const raw = new SQL.Database();
+  const api = createDatabaseApi(raw);
+  await api.runMigrations();
+  const category = await api.addCategory({ name: 'Transfer', icon: 'cat_other.png', type: 'expense' });
+  await api.addTransaction({ amount: 10, categoryId: category.id, date: '2026-09-08', type: 'expense' });
+  await api.updateCategory(category.id, { name: 'Transfer', icon: 'cat_other.png', type: 'income' });
+  assert.equal(api.getCategories('income').find(row => row.Id === category.id).Type, 'income');
+  assert.equal(api.getTransactions({ categoryId: category.id })[0].Type, 'income');
+});
+
+function persistenceFailureFixture() {
+  const raw = new SQL.Database();
+  let rejectPersistence = false;
+  const api = createDatabaseApi(raw, async () => {
+    if (rejectPersistence) throw new Error('disk full');
+  });
+  return { api, reject: () => { rejectPersistence = true; } };
+}
+
+test('failed persistence rolls back creates', async () => {
+  const { api, reject } = persistenceFailureFixture();
+  await api.runMigrations();
+  reject();
+  await assert.rejects(api.addCategory({ name: 'Not saved', type: 'expense' }), /disk full/);
+  assert.equal(api.getCategories('expense').some(row => row.Name === 'Not saved'), false);
+});
+
+test('failed persistence rolls back updates', async () => {
+  const { api, reject } = persistenceFailureFixture();
+  await api.runMigrations();
+  const category = await api.addCategory({ name: 'Original', type: 'expense' });
+  reject();
+  await assert.rejects(api.updateCategory(category.id, { name: 'Changed', type: 'income' }), /disk full/);
+  assert.equal(api.getCategories('expense').find(row => row.Id === category.id).Name, 'Original');
+});
+
+test('failed persistence rolls back deletes', async () => {
+  const { api, reject } = persistenceFailureFixture();
+  await api.runMigrations();
+  const category = await api.addCategory({ name: 'Keep me', type: 'expense' });
+  reject();
+  await assert.rejects(api.deleteCategory(category.id), /disk full/);
+  assert.equal(api.getCategories('expense').some(row => row.Id === category.id), true);
+});
+
+test('failed persistence rolls back replacement imports', async () => {
+  const { api, reject } = persistenceFailureFixture();
+  await api.runMigrations();
+  await api.addOrReplaceSnapshotByDate({ date: '2026-09-01', stock: 1 });
+  reject();
+  await assert.rejects(api.importSnapshots([{ date: '2026-09-02', stock: 2 }], true), /disk full/);
+  assert.deepEqual(api.getSnapshots().map(row => [row.Date, row.Stock]), [['2026-09-01', 1]]);
+});
+
+test('failed replacement preparation leaves the current database usable', async () => {
+  const currentRaw = new SQL.Database();
+  const current = createDatabaseApi(currentRaw);
+  await current.runMigrations();
+  await current.addCategory({ name: 'Current data', type: 'expense' });
+  const candidateRaw = new SQL.Database();
+  const candidate = createDatabaseApi(candidateRaw);
+  await candidate.runMigrations();
+  const candidateBytes = candidate.exportBytes();
+
+  await assert.rejects(
+    prepareDatabaseReplacement(SQL, candidateBytes, async () => { throw new Error('persist failed'); }),
+    /persist failed/,
+  );
+  await assert.rejects(prepareDatabaseReplacement(SQL, new Uint8Array([1, 2, 3]), async () => {}));
+  assert.equal(current.getCategories('expense').some(row => row.Name === 'Current data'), true);
 });
