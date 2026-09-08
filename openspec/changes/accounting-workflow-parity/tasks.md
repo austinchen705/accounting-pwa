@@ -1,9 +1,9 @@
 ## 1. Compatibility Foundation
 
 - [x] 1.1 Add a Node test harness for pure browser modules and sql.js schema checks
-- [ ] 1.2 Add additive MAUI-compatible migrations for budgets, exchange-rate cache, attachment metadata, and indexes
-- [ ] 1.3 Add repository queries and mutations required by every parity workflow
-- [ ] 1.4 Verify an older and a MAUI-shaped database migrate without record or identifier loss
+- [x] 1.2 Add additive MAUI-compatible migrations for budgets, exchange-rate cache, attachment metadata, and indexes
+- [x] 1.3 Add repository queries and mutations required by every parity workflow
+- [x] 1.4 Verify an older and a MAUI-shaped database migrate without record or identifier loss
 
 ## 2. Shell and Home
 
