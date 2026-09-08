@@ -343,11 +343,12 @@ document.addEventListener('alpine:init', () => {
       }
       const selected = this.statisticsState.selectedCategoryId === ''
         ? null : Number(this.statisticsState.selectedCategoryId);
+      const categorySeries = Accounting.statisticsCategorySeries(categoryRows, months, selected);
       this.statisticsState.months = months;
       this.statisticsState.monthly = monthly;
       this.statisticsState.expenseCategories = DB.getCategories('expense');
-      this.statisticsState.categorySeries = Accounting.categoryTrendSeries(categoryRows, months, selected, 5);
-      this.statisticsState.insights = Accounting.trendInsights(monthly, this.statisticsState.categorySeries);
+      this.statisticsState.categorySeries = categorySeries.chartSeries;
+      this.statisticsState.insights = Accounting.trendInsights(monthly, categorySeries.insightSeries);
       requestAnimationFrame(() => setTimeout(() => this.renderStatisticsCharts(), 0));
     },
 

@@ -214,6 +214,20 @@ test('builds MAUI-compatible trend insights', () => {
   assert.equal(Accounting.trendInsights([{ month: '2026-09', income: 0, expense: 0 }]).incomeMoM, '--');
 });
 
+test('keeps dominant-category insights unfiltered when a smaller chart category is selected', () => {
+  const rows = [
+    { CategoryId: 1, CategoryName: 'Largest', Month: '2026-09', Amount: 500 },
+    { CategoryId: 2, CategoryName: 'Selected small', Month: '2026-09', Amount: 50 },
+  ];
+  const series = Accounting.statisticsCategorySeries(rows, ['2026-09'], 2);
+  assert.equal(series.chartSeries[0].categoryName, 'Selected small');
+  assert.equal(series.insightSeries[0].categoryName, 'Largest');
+  assert.equal(
+    Accounting.trendInsights([{ month: '2026-09', income: 0, expense: 550, balance: -550 }], series.insightSeries).dominantCategory,
+    '主要支出分類：Largest (500)',
+  );
+});
+
 test('groups report detail transactions by date newest first', () => {
   const groups = Accounting.groupTransactionsByDate([
     { Id: 1, Date: '2026-09-07', Amount: 10 },

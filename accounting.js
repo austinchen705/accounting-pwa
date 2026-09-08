@@ -181,6 +181,13 @@
     return [...stats.values()];
   }
 
+  function statisticsCategorySeries(rows, months, selectedCategoryId) {
+    return {
+      chartSeries: categoryTrendSeries(rows, months, selectedCategoryId, 5),
+      insightSeries: categoryTrendSeries(rows, months, null, 5),
+    };
+  }
+
   function formatMonthChange(previous, current) {
     if (Number(previous) === 0) return '--';
     const ratio = ((Number(current) - Number(previous)) / Number(previous)) * 100;
@@ -355,6 +362,7 @@
     frequentCategories,
     expenseCategoryReport,
     categoryTrendSeries,
+    statisticsCategorySeries,
     monthTrendStats,
     monthTrendDatasets,
     trendInsights,
