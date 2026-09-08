@@ -167,6 +167,68 @@
       .slice(0, selectedCategoryId === null ? limit : 1);
   }
 
+  function monthTrendStats(transactions, months) {
+    const stats = new Map(months.map(month => [month, { month, income: 0, expense: 0, balance: 0 }]));
+    for (const transaction of transactions || []) {
+      const month = String(transaction.Date || '').slice(0, 7);
+      const row = stats.get(month);
+      if (!row) continue;
+      const amount = Number(transaction.BaseAmount ?? transaction.Amount ?? 0);
+      if (normalizeType(transaction.Type) === 'income') row.income += amount;
+      if (normalizeType(transaction.Type) === 'expense') row.expense += amount;
+      row.balance = row.income - row.expense;
+    }
+    return [...stats.values()];
+  }
+
+  function formatMonthChange(previous, current) {
+    if (Number(previous) === 0) return '--';
+    const ratio = ((Number(current) - Number(previous)) / Number(previous)) * 100;
+    return `${ratio >= 0 ? '+' : ''}${ratio.toFixed(1)} %`;
+  }
+
+  function trendInsights(stats) {
+    if (!stats?.length) return { incomeMoM: '--', expenseMoM: '--', maxExpense: '--', minNet: '--' };
+    const latest = stats.at(-1);
+    const previous = stats.at(-2);
+    let maxExpense = stats[0];
+    let minNet = stats[0];
+    for (const row of stats.slice(1)) {
+      if (row.expense > maxExpense.expense) maxExpense = row;
+      if ((row.income - row.expense) < (minNet.income - minNet.expense)) minNet = row;
+    }
+    const number = value => Number(value).toLocaleString('en-US', { maximumFractionDigits: 0 });
+    return {
+      incomeMoM: previous ? formatMonthChange(previous.income, latest.income) : '--',
+      expenseMoM: previous ? formatMonthChange(previous.expense, latest.expense) : '--',
+      maxExpense: `最高支出月：${maxExpense.month} (${number(maxExpense.expense)})`,
+      minNet: `最低淨額月：${minNet.month} (${number(minNet.income - minNet.expense)})`,
+    };
+  }
+
+  function groupTransactionsByDate(transactions) {
+    const groups = new Map();
+    for (const transaction of transactions || []) {
+      const date = String(transaction.Date || '').slice(0, 10);
+      if (!groups.has(date)) groups.set(date, []);
+      groups.get(date).push(transaction);
+    }
+    return [...groups.entries()]
+      .sort(([left], [right]) => right.localeCompare(left))
+      .map(([date, rows]) => ({
+        date,
+        transactions: rows.sort((left, right) => Number(right.Id || 0) - Number(left.Id || 0)),
+      }));
+  }
+
+  function applyCurrencyRates(transactions, rates) {
+    return (transactions || []).map(transaction => {
+      const currency = String(transaction.Currency || 'TWD').toUpperCase();
+      const rate = Number(rates?.[currency]);
+      return { ...transaction, BaseAmount: Number(transaction.Amount || 0) * (Number.isFinite(rate) ? rate : 1) };
+    });
+  }
+
   function niceAxisStep(values) {
     const max = Math.max(0, ...(values || []).map(value => Math.abs(Number(value) || 0)));
     if (max <= 0) return 1000;
@@ -208,6 +270,10 @@
     frequentCategories,
     expenseCategoryReport,
     categoryTrendSeries,
+    monthTrendStats,
+    trendInsights,
+    groupTransactionsByDate,
+    applyCurrencyRates,
     niceAxisStep,
     parseAssetCsv,
     convertUsdToTwd,

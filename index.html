@@ -76,14 +76,93 @@
     </ul>
   </main>
 
-  <!-- Statistics placeholder; populated in the reporting slice -->
+  <!-- Statistics -->
   <main x-show="$store.app.currentView === 'statistics'">
-    <div class="feature-empty"><span>📊</span><p>統計圖表正在同步中</p></div>
+    <div class="month-nav">
+      <button @click="$store.app.moveStatisticsMonth(-1)" class="btn-icon" aria-label="Previous statistics month">‹</button>
+      <span x-text="$store.app.statisticsState.anchorMonth"></span>
+      <button @click="$store.app.moveStatisticsMonth(1)" class="btn-icon" aria-label="Next statistics month">›</button>
+    </div>
+    <section class="insight-grid">
+      <article><small>收入月變化</small><strong x-text="$store.app.statisticsState.insights.incomeMoM"></strong></article>
+      <article><small>支出月變化</small><strong x-text="$store.app.statisticsState.insights.expenseMoM"></strong></article>
+      <article><small>最高支出</small><strong x-text="$store.app.statisticsState.insights.maxExpense"></strong></article>
+      <article><small>最低淨額</small><strong x-text="$store.app.statisticsState.insights.minNet"></strong></article>
+    </section>
+    <h2 class="section-heading">近 12 個月收支</h2>
+    <div class="chart-container statistics-chart"
+         x-show="$store.app.statisticsState.monthly.some(row => row.income || row.expense)">
+      <canvas id="statistics-monthly-chart"></canvas>
+    </div>
+    <div class="feature-empty compact"
+         x-show="!$store.app.statisticsState.monthly.some(row => row.income || row.expense)">此期間尚無收支資料</div>
+    <div class="section-toolbar">
+      <h2 class="section-heading">支出分類趨勢</h2>
+      <select aria-label="Expense category trend" x-model="$store.app.statisticsState.selectedCategoryId"
+              @change="$store.app.setStatisticsCategory($event.target.value)">
+        <option value="">前五大分類</option>
+        <template x-for="category in $store.app.statisticsState.expenseCategories" :key="category.Id">
+          <option :value="category.Id" x-text="category.Name"></option>
+        </template>
+      </select>
+    </div>
+    <div class="chart-container statistics-chart" x-show="$store.app.statisticsState.categorySeries.length">
+      <canvas id="statistics-category-chart"></canvas>
+    </div>
+    <div class="feature-empty compact" x-show="!$store.app.statisticsState.categorySeries.length">此期間尚無分類支出</div>
   </main>
 
-  <!-- Category report placeholder; populated in the reporting slice -->
+  <!-- Expense Category Report -->
   <main x-show="$store.app.currentView === 'categoryReport'">
-    <div class="feature-empty"><span>🍩</span><p>支出分類報表正在同步中</p></div>
+    <div class="range-tabs">
+      <template x-for="option in [{id:'week',label:'週'},{id:'month',label:'月'},{id:'year',label:'年'},{id:'all',label:'全部'}]" :key="option.id">
+        <button @click="$store.app.setReportRange(option.id)" :class="{ active: $store.app.report.range === option.id }" x-text="option.label"></button>
+      </template>
+    </div>
+    <div class="month-nav report-period">
+      <button @click="$store.app.moveReportPeriod(-1)" class="btn-icon" :disabled="$store.app.report.range === 'all'">‹</button>
+      <span x-text="$store.app.report.window?.label || ''"></span>
+      <button @click="$store.app.moveReportPeriod(1)" class="btn-icon" :disabled="$store.app.report.range === 'all'">›</button>
+    </div>
+    <section class="report-total">
+      <span>支出合計</span>
+      <strong x-text="$store.app.report.totalExpense.toLocaleString()"></strong>
+      <small>單位：TWD</small>
+    </section>
+    <div class="report-chart" x-show="$store.app.report.categories.length">
+      <canvas id="category-report-chart"></canvas>
+    </div>
+    <ul class="category-ranking">
+      <template x-if="$store.app.report.categories.length === 0"><li class="empty-state">此期間尚無支出資料</li></template>
+      <template x-for="(row, index) in $store.app.report.categories" :key="row.categoryId">
+        <li @click="$store.app.openReportDetail(row)">
+          <span class="legend-dot" :style="'background:' + ['#2563EB','#16A34A','#EA580C','#7C3AED','#DC2626','#0891B2','#CA8A04','#DB2777'][index % 8]"></span>
+          <div><strong x-text="row.categoryName"></strong><small x-text="row.transactionCount + ' 筆交易'"></small></div>
+          <div class="ranking-value"><strong x-text="row.amount.toLocaleString()"></strong><small x-text="Math.round(row.percentage * 100) + '%'"></small></div>
+          <span class="chevron">›</span>
+        </li>
+      </template>
+    </ul>
+  </main>
+
+  <main x-show="$store.app.currentView === 'reportDetail'">
+    <div class="detail-heading">
+      <h2 x-text="$store.app.report.detailTitle"></h2>
+      <span x-text="$store.app.report.window?.label || ''"></span>
+    </div>
+    <template x-for="group in $store.app.report.detailGroups" :key="group.date">
+      <section class="transaction-group">
+        <h3 x-text="group.date.replace(/-/g, '/')"></h3>
+        <ul class="tx-list">
+          <template x-for="tx in group.transactions" :key="tx.Id">
+            <li class="tx-row" @click="$store.app.openEdit(tx)">
+              <div class="tx-info"><span class="tx-note" x-text="tx.Note || tx.CategoryName"></span></div>
+              <div class="tx-right"><span class="tx-amount expense" x-text="'-' + Number(tx.Amount).toLocaleString() + ' ' + tx.Currency"></span></div>
+            </li>
+          </template>
+        </ul>
+      </section>
+    </template>
   </main>
 
   <!-- More View -->

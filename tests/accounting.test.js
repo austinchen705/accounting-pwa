@@ -112,3 +112,55 @@ test('converts FirstTrade USD values and rejects unavailable rates', () => {
   assert.throws(() => Accounting.convertUsdToTwd(100, 1), /unavailable/i);
   assert.throws(() => Accounting.convertUsdToTwd(100, 0), /unavailable/i);
 });
+
+test('moves report anchors without changing all-time anchors', () => {
+  assert.equal(Accounting.moveReportAnchor('week', '2026-09-08', -1), '2026-09-01');
+  assert.equal(Accounting.moveReportAnchor('month', '2026-01-15', -1), '2025-12-01');
+  assert.equal(Accounting.moveReportAnchor('year', '2026-09-08', 1), '2027-01-01');
+  assert.equal(Accounting.moveReportAnchor('all', '2026-09-08', 1), '2026-09-08');
+});
+
+test('builds zero-filled twelve-month income expense and balance stats', () => {
+  const stats = Accounting.monthTrendStats([
+    { Date: '2026-08-01', Type: 'income', BaseAmount: 100 },
+    { Date: '2026-08-02', Type: 'expense', BaseAmount: 25 },
+    { Date: '2026-09-01', Type: 'expense', BaseAmount: 40 },
+  ], ['2026-07', '2026-08', '2026-09']);
+  assert.deepEqual(stats, [
+    { month: '2026-07', income: 0, expense: 0, balance: 0 },
+    { month: '2026-08', income: 100, expense: 25, balance: 75 },
+    { month: '2026-09', income: 0, expense: 40, balance: -40 },
+  ]);
+});
+
+test('builds MAUI-compatible trend insights', () => {
+  assert.deepEqual(Accounting.trendInsights([
+    { month: '2026-08', income: 100, expense: 20 },
+    { month: '2026-09', income: 150, expense: 40 },
+  ]), {
+    incomeMoM: '+50.0 %',
+    expenseMoM: '+100.0 %',
+    maxExpense: '最高支出月：2026-09 (40)',
+    minNet: '最低淨額月：2026-08 (80)',
+  });
+  assert.equal(Accounting.trendInsights([{ month: '2026-09', income: 0, expense: 0 }]).incomeMoM, '--');
+});
+
+test('groups report detail transactions by date newest first', () => {
+  const groups = Accounting.groupTransactionsByDate([
+    { Id: 1, Date: '2026-09-07', Amount: 10 },
+    { Id: 2, Date: '2026-09-08', Amount: 20 },
+    { Id: 3, Date: '2026-09-08', Amount: 30 },
+  ]);
+  assert.deepEqual(groups.map(group => [group.date, group.transactions.map(row => row.Id)]), [
+    ['2026-09-08', [3, 2]],
+    ['2026-09-07', [1]],
+  ]);
+});
+
+test('applies currency rates without mutating source transactions', () => {
+  const source = [{ Amount: 10, Currency: 'USD' }, { Amount: 20, Currency: 'TWD' }];
+  const converted = Accounting.applyCurrencyRates(source, { USD: 30, TWD: 1 });
+  assert.deepEqual(converted.map(row => row.BaseAmount), [300, 20]);
+  assert.equal('BaseAmount' in source[0], false);
+});

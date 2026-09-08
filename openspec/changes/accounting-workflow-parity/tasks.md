@@ -19,10 +19,10 @@
 
 ## 4. Reports and Statistics
 
-- [ ] 4.1 Implement week, month, year, and all-time expense report windows and aggregations
-- [ ] 4.2 Add the expense donut, ranked category list, and context-preserving transaction drill-down
-- [ ] 4.3 Implement rolling twelve-month summary and category trend calculations
-- [ ] 4.4 Add statistics charts, category selection, insights, and dynamic axis scaling
+- [x] 4.1 Implement week, month, year, and all-time expense report windows and aggregations
+- [x] 4.2 Add the expense donut, ranked category list, and context-preserving transaction drill-down
+- [x] 4.3 Implement rolling twelve-month summary and category trend calculations
+- [x] 4.4 Add statistics charts, category selection, insights, and dynamic axis scaling
 
 ## 5. Enhanced Transactions and Receipts
 

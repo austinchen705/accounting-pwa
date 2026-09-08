@@ -103,6 +103,7 @@ main {
   text-align: center;
 }
 .feature-empty span { font-size: 2.5rem; }
+.feature-empty.compact { min-height: 180px; }
 .card-list { display: flex; flex-direction: column; gap: 10px; list-style: none; }
 .list-card,
 .budget-card {
@@ -123,6 +124,76 @@ main {
 .progress-track { height: 8px; overflow: hidden; background: var(--border); border-radius: 999px; }
 .progress-track span { display: block; height: 100%; background: var(--primary); border-radius: inherit; }
 .budget-card.over .progress-track span { background: var(--danger); }
+
+/* Reports and statistics */
+.range-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.range-tabs button {
+  min-height: 44px;
+  color: var(--primary);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.range-tabs button.active { color: #fff; background: var(--primary); border-color: var(--primary); }
+.report-period span { min-width: 160px; text-align: center; }
+.report-total {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 18px;
+  margin-bottom: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+.report-total span, .report-total small { color: var(--muted); }
+.report-total strong { color: var(--expense); font-size: 1.8rem; }
+.report-chart { position: relative; height: 240px; margin: 8px 0 18px; }
+.category-ranking { display: flex; flex-direction: column; gap: 8px; list-style: none; }
+.category-ranking li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 68px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+}
+.category-ranking li > div:first-of-type { display: flex; flex: 1; flex-direction: column; }
+.category-ranking small { color: var(--muted); }
+.legend-dot { flex: 0 0 12px; width: 12px; height: 12px; border-radius: 50%; }
+.ranking-value { display: flex; flex-direction: column; align-items: flex-end; }
+.detail-heading { margin-bottom: 20px; }
+.detail-heading h2 { margin-bottom: 4px; font-size: 1.25rem; }
+.detail-heading span { color: var(--muted); }
+.transaction-group { margin-bottom: 18px; }
+.transaction-group h3 { margin-bottom: 8px; color: var(--muted); font-size: 0.9rem; }
+.insight-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 22px; }
+.insight-grid article {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-height: 92px;
+  padding: 13px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.insight-grid small { color: var(--muted); }
+.insight-grid strong { font-size: 0.9rem; line-height: 1.4; overflow-wrap: anywhere; }
+.statistics-chart { height: 300px; }
+.section-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 24px; }
+.section-toolbar .section-heading { margin: 0; }
+.section-toolbar select { min-height: 44px; max-width: 180px; padding: 8px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); }
 
 /* Month nav */
 .month-nav {
@@ -391,6 +462,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   .summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .summary-card.balance-card { grid-column: auto; }
   .menu-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .insight-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
 /* Toast */

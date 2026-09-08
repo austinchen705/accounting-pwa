@@ -5,6 +5,10 @@ function currentMonth() {
 }
 
 let _chart = null;
+let _reportChart = null;
+let _statisticsChart = null;
+let _categoryTrendChart = null;
+const REPORT_COLORS = ['#2563EB', '#16A34A', '#EA580C', '#7C3AED', '#DC2626', '#0891B2', '#CA8A04', '#DB2777'];
 
 document.addEventListener('alpine:init', () => {
   const initialState = AppState.createInitialState();
@@ -31,6 +35,24 @@ document.addEventListener('alpine:init', () => {
       property: '',
     },
     snapshotErrors: {},
+    report: {
+      ...initialState.report,
+      window: null,
+      totalExpense: 0,
+      categories: [],
+      sourceTransactions: [],
+      detailTitle: '',
+      detailCategoryId: null,
+      detailGroups: [],
+    },
+    statisticsState: {
+      ...initialState.statisticsState,
+      months: [],
+      monthly: [],
+      insights: { incomeMoM: '--', expenseMoM: '--', maxExpense: '--', minNet: '--' },
+      categorySeries: [],
+      expenseCategories: [],
+    },
 
     viewTitle() {
       const editing = this.currentView === 'form' ? Boolean(this.editTarget)
@@ -54,6 +76,8 @@ document.addEventListener('alpine:init', () => {
       else if (view === 'categories') await this.loadManagedCategories();
       else if (view === 'budgets') await this.loadBudgets();
       else if (view === 'trends') this.loadSnapshots();
+      else if (view === 'statistics') await this.loadStatistics();
+      else if (view === 'categoryReport') await this.loadCategoryReport();
     },
 
     async goBack() {
@@ -98,6 +122,166 @@ document.addEventListener('alpine:init', () => {
     async loadTransactions() {
       this.categories = DB.getCategories(this.form.type || 'expense');
       this.transactions = DB.getTransactions(this.filter);
+    },
+
+    async getTwdRates(transactions) {
+      const currencies = [...new Set((transactions || []).map(row => String(row.Currency || 'TWD').toUpperCase()))];
+      const rates = { TWD: 1 };
+      for (const currency of currencies) {
+        if (currency === 'TWD') continue;
+        const cached = DB.getExchangeRates(currency);
+        const cachedRate = Number(cached?.rates?.TWD);
+        const cacheAge = cached ? Date.now() - Date.parse(cached.updatedAt) : Infinity;
+        if (Number.isFinite(cachedRate) && cacheAge < 24 * 60 * 60 * 1000) {
+          rates[currency] = cachedRate;
+          continue;
+        }
+        try {
+          const response = await fetch(`https://api.exchangerate-api.com/v4/latest/${encodeURIComponent(currency)}`);
+          if (!response.ok) throw new Error(`rate HTTP ${response.status}`);
+          const payload = await response.json();
+          await DB.setExchangeRates(currency, payload.rates || {}, new Date().toISOString());
+          rates[currency] = Number(payload.rates?.TWD) || cachedRate || 1;
+        } catch {
+          rates[currency] = cachedRate || 1;
+        }
+      }
+      return rates;
+    },
+
+    async transactionsInTwd(transactions) {
+      return Accounting.applyCurrencyRates(transactions, await this.getTwdRates(transactions));
+    },
+
+    async loadCategoryReport() {
+      const window = Accounting.reportWindow(this.report.range, this.report.anchorDate);
+      const source = DB.getTransactions({ start: window.start, endExclusive: window.endExclusive });
+      const converted = await this.transactionsInTwd(source);
+      const summary = Accounting.expenseCategoryReport(converted, window);
+      this.report.window = window;
+      this.report.totalExpense = summary.totalExpense;
+      this.report.categories = summary.categories;
+      this.report.sourceTransactions = converted;
+      requestAnimationFrame(() => setTimeout(() => this.renderCategoryReportChart(), 0));
+    },
+
+    async setReportRange(range) {
+      this.report.range = range;
+      await this.loadCategoryReport();
+    },
+
+    async moveReportPeriod(delta) {
+      if (this.report.range === 'all') return;
+      this.report.anchorDate = Accounting.moveReportAnchor(this.report.range, this.report.anchorDate, delta);
+      await this.loadCategoryReport();
+    },
+
+    openReportDetail(category) {
+      const transactions = this.report.sourceTransactions.filter(row =>
+        Accounting.normalizeType(row.Type) === 'expense' && Number(row.CategoryId) === Number(category.categoryId));
+      this.report.detailTitle = category.categoryName;
+      this.report.detailCategoryId = category.categoryId;
+      this.report.detailGroups = Accounting.groupTransactionsByDate(transactions);
+      this.currentView = 'reportDetail';
+    },
+
+    renderCategoryReportChart() {
+      const canvas = document.getElementById('category-report-chart');
+      if (!canvas || this.currentView !== 'categoryReport') return;
+      if (_reportChart) { _reportChart.destroy(); _reportChart = null; }
+      if (!this.report.categories.length) return;
+      _reportChart = new Chart(canvas, {
+        type: 'doughnut',
+        data: {
+          labels: this.report.categories.map(row => row.categoryName),
+          datasets: [{
+            data: this.report.categories.map(row => row.amount),
+            backgroundColor: this.report.categories.map((_, index) => REPORT_COLORS[index % REPORT_COLORS.length]),
+            borderColor: '#FFFFFF', borderWidth: 2,
+          }],
+        },
+        options: { responsive: true, maintainAspectRatio: false, cutout: '62%', plugins: { legend: { display: false } } },
+      });
+    },
+
+    async loadStatistics() {
+      const months = Accounting.twelveMonthWindow(this.statisticsState.anchorMonth);
+      const endExclusive = `${Accounting.moveMonth(this.statisticsState.anchorMonth, 1)}-01`;
+      const source = DB.getTransactions({ start: `${months[0]}-01`, endExclusive });
+      const converted = await this.transactionsInTwd(source);
+      const monthly = Accounting.monthTrendStats(converted, months);
+      const categoryRows = [];
+      for (const transaction of converted) {
+        if (Accounting.normalizeType(transaction.Type) !== 'expense') continue;
+        categoryRows.push({
+          CategoryId: transaction.CategoryId,
+          CategoryName: transaction.CategoryName || '未知',
+          Month: String(transaction.Date).slice(0, 7),
+          Amount: transaction.BaseAmount,
+        });
+      }
+      const selected = this.statisticsState.selectedCategoryId === ''
+        ? null : Number(this.statisticsState.selectedCategoryId);
+      this.statisticsState.months = months;
+      this.statisticsState.monthly = monthly;
+      this.statisticsState.insights = Accounting.trendInsights(monthly);
+      this.statisticsState.expenseCategories = DB.getCategories('expense');
+      this.statisticsState.categorySeries = Accounting.categoryTrendSeries(categoryRows, months, selected, 5);
+      requestAnimationFrame(() => setTimeout(() => this.renderStatisticsCharts(), 0));
+    },
+
+    async moveStatisticsMonth(delta) {
+      this.statisticsState.anchorMonth = Accounting.moveMonth(this.statisticsState.anchorMonth, delta);
+      await this.loadStatistics();
+    },
+
+    async setStatisticsCategory(value) {
+      this.statisticsState.selectedCategoryId = value;
+      await this.loadStatistics();
+    },
+
+    renderStatisticsCharts() {
+      if (this.currentView !== 'statistics') return;
+      const monthlyCanvas = document.getElementById('statistics-monthly-chart');
+      const categoryCanvas = document.getElementById('statistics-category-chart');
+      if (_statisticsChart) { _statisticsChart.destroy(); _statisticsChart = null; }
+      if (_categoryTrendChart) { _categoryTrendChart.destroy(); _categoryTrendChart = null; }
+
+      const monthly = this.statisticsState.monthly;
+      if (monthlyCanvas && monthly.some(row => row.income || row.expense)) {
+        const values = monthly.flatMap(row => [row.income, row.expense]);
+        _statisticsChart = new Chart(monthlyCanvas, {
+          type: 'line',
+          data: {
+            labels: this.statisticsState.months.map(month => month.slice(5)),
+            datasets: [
+              { label: '收入', data: monthly.map(row => row.income), borderColor: '#16A34A', backgroundColor: '#16A34A', tension: 0, pointRadius: 3 },
+              { label: '支出', data: monthly.map(row => row.expense), borderColor: '#DC2626', backgroundColor: '#DC2626', tension: 0, pointRadius: 3 },
+            ],
+          },
+          options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { stepSize: Accounting.niceAxisStep(values) } } } },
+        });
+      }
+
+      const categorySeries = this.statisticsState.categorySeries;
+      if (categoryCanvas && categorySeries.length) {
+        const values = categorySeries.flatMap(series => series.values);
+        _categoryTrendChart = new Chart(categoryCanvas, {
+          type: 'line',
+          data: {
+            labels: this.statisticsState.months.map(month => month.slice(5)),
+            datasets: categorySeries.map((series, index) => ({
+              label: series.categoryName,
+              data: series.values,
+              borderColor: REPORT_COLORS[index % REPORT_COLORS.length],
+              backgroundColor: REPORT_COLORS[index % REPORT_COLORS.length],
+              tension: 0,
+              pointRadius: 3,
+            })),
+          },
+          options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { stepSize: Accounting.niceAxisStep(values) } } } },
+        });
+      }
     },
 
     async loadHome() {
@@ -445,7 +629,7 @@ document.addEventListener('alpine:init', () => {
     },
 
     openEdit(tx) {
-      this.formReturnView = this.currentView === 'home' ? 'home' : 'transactions';
+      this.formReturnView = ['home', 'reportDetail'].includes(this.currentView) ? this.currentView : 'transactions';
       this.editTarget = tx;
       this.form = {
         amount: String(tx.Amount), currency: tx.Currency,
@@ -491,6 +675,13 @@ document.addEventListener('alpine:init', () => {
       await this.loadTransactions();
       await this.loadHome();
       await this.loadBudgets();
+      if (this.formReturnView === 'reportDetail') {
+        await this.loadCategoryReport();
+        const category = this.report.categories.find(row => Number(row.categoryId) === Number(this.report.detailCategoryId));
+        if (category) this.openReportDetail(category);
+        else this.currentView = 'categoryReport';
+        return;
+      }
       this.currentView = this.formReturnView;
     },
 
@@ -500,6 +691,13 @@ document.addEventListener('alpine:init', () => {
       await this.loadTransactions();
       await this.loadHome();
       await this.loadBudgets();
+      if (this.formReturnView === 'reportDetail') {
+        await this.loadCategoryReport();
+        const category = this.report.categories.find(row => Number(row.categoryId) === Number(this.report.detailCategoryId));
+        if (category) this.openReportDetail(category);
+        else this.currentView = 'categoryReport';
+        return;
+      }
       this.currentView = this.formReturnView;
     },
 

@@ -11,6 +11,7 @@
     transactions: '交易紀錄',
     statistics: '統計',
     categoryReport: '支出分類',
+    reportDetail: '分類交易',
     more: '更多',
     categories: '分類管理',
     budgets: '預算',
