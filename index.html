@@ -26,21 +26,157 @@
 
   <!-- Nav bar -->
   <header class="nav-bar">
-    <button x-show="$store.app.currentView !== 'transactions'"
-            @click="$store.app.currentView = ($store.app.currentView === 'snapshotForm' ? 'trends' : 'transactions')"
+    <button x-show="!$store.app.isPrimaryView()"
+            @click="$store.app.goBack()"
             class="btn-icon">←</button>
-    <span x-text="
-      $store.app.currentView === 'transactions' ? 'Accounts' :
-      $store.app.currentView === 'trends' ? '資產趨勢' :
-      $store.app.currentView === 'snapshotForm' && !$store.app.snapshotEditTarget ? '新增資產快照' :
-      $store.app.currentView === 'snapshotForm' ? '編輯資產快照' :
-      $store.app.currentView === 'form' && !$store.app.editTarget ? 'Add Transaction' :
-      $store.app.currentView === 'form' ? 'Edit Transaction' : 'Settings'
-    "></span>
-    <button x-show="['transactions','trends'].includes($store.app.currentView)"
-            @click="$store.app.currentView = 'settings'"
-            class="btn-icon">⚙</button>
+    <span x-text="$store.app.viewTitle()"></span>
+    <span x-show="!$store.app.isPrimaryView()" class="nav-spacer" aria-hidden="true"></span>
   </header>
+
+  <!-- Home View -->
+  <main x-show="$store.app.currentView === 'home'">
+    <div class="month-nav">
+      <button @click="$store.app.moveHomeMonth(-1)" class="btn-icon" aria-label="Previous month">‹</button>
+      <span x-text="$store.app.home.month"></span>
+      <button @click="$store.app.moveHomeMonth(1)" class="btn-icon" aria-label="Next month">›</button>
+    </div>
+    <section class="summary-grid" aria-label="Monthly summary">
+      <article class="summary-card income-card">
+        <span>收入</span>
+        <strong x-text="$store.app.home.summary.income.toLocaleString()"></strong>
+      </article>
+      <article class="summary-card expense-card">
+        <span>支出</span>
+        <strong x-text="$store.app.home.summary.expense.toLocaleString()"></strong>
+      </article>
+      <article class="summary-card balance-card">
+        <span>結餘</span>
+        <strong x-text="$store.app.home.summary.balance.toLocaleString()"></strong>
+      </article>
+    </section>
+    <h2 class="section-heading">最近交易</h2>
+    <ul class="tx-list">
+      <template x-if="$store.app.home.recent.length === 0">
+        <li class="empty-state">本月尚無交易</li>
+      </template>
+      <template x-for="tx in $store.app.home.recent" :key="tx.Id">
+        <li class="tx-row" @click="$store.app.openEdit(tx)">
+          <span class="tx-icon" x-text="$store.app.iconDisplay(tx.CategoryIcon)"></span>
+          <div class="tx-info">
+            <span class="tx-category" x-text="tx.CategoryName || '未分類'"></span>
+            <span class="tx-note" x-text="tx.Note"></span>
+          </div>
+          <div class="tx-right">
+            <span class="tx-amount" :class="tx.Type === 'income' ? 'income' : 'expense'"
+                  x-text="(tx.Type === 'income' ? '+' : '-') + Number(tx.Amount).toLocaleString() + ' ' + tx.Currency"></span>
+            <span class="tx-date" x-text="tx.Date"></span>
+          </div>
+        </li>
+      </template>
+    </ul>
+  </main>
+
+  <!-- Statistics placeholder; populated in the reporting slice -->
+  <main x-show="$store.app.currentView === 'statistics'">
+    <div class="feature-empty"><span>📊</span><p>統計圖表正在同步中</p></div>
+  </main>
+
+  <!-- Category report placeholder; populated in the reporting slice -->
+  <main x-show="$store.app.currentView === 'categoryReport'">
+    <div class="feature-empty"><span>🍩</span><p>支出分類報表正在同步中</p></div>
+  </main>
+
+  <!-- More View -->
+  <main x-show="$store.app.currentView === 'more'">
+    <div class="menu-grid">
+      <button class="menu-card" @click="$store.app.navigate('budgets')"><span>🎯</span><strong>預算</strong><small>每月分類額度</small></button>
+      <button class="menu-card" @click="$store.app.navigate('categories')"><span>🏷️</span><strong>分類管理</strong><small>收入與支出分類</small></button>
+      <button class="menu-card" @click="$store.app.navigate('trends')"><span>📈</span><strong>資產趨勢</strong><small>資產快照與圖表</small></button>
+      <button class="menu-card" @click="$store.app.navigate('settings')"><span>⚙️</span><strong>設定</strong><small>Google Drive 與離線快取</small></button>
+    </div>
+  </main>
+
+  <!-- Category Management -->
+  <main x-show="$store.app.currentView === 'categories'">
+    <div class="type-tabs">
+      <button @click="$store.app.setCategoryType('expense')" :class="{ active: $store.app.category.type === 'expense' }">支出</button>
+      <button @click="$store.app.setCategoryType('income')" :class="{ active: $store.app.category.type === 'income' }">收入</button>
+    </div>
+    <ul class="card-list">
+      <template x-if="$store.app.category.items.length === 0"><li class="empty-state">尚無分類</li></template>
+      <template x-for="item in $store.app.category.items" :key="item.Id">
+        <li class="list-card" @click="$store.app.openCategoryEdit(item)">
+          <span class="tx-icon" x-text="$store.app.iconDisplay(item.Icon)"></span>
+          <strong x-text="item.Name"></strong>
+          <span class="chevron">›</span>
+        </li>
+      </template>
+    </ul>
+    <button class="fab" @click="$store.app.openCategoryAdd()">+</button>
+  </main>
+
+  <main x-show="$store.app.currentView === 'categoryForm'">
+    <form @submit.prevent="$store.app.saveCategory()" class="tx-form">
+      <div class="form-group">
+        <label for="category-name">名稱</label>
+        <input id="category-name" x-model="$store.app.category.form.name" maxlength="50" autocomplete="off">
+        <span class="error" x-text="$store.app.category.errors.name"></span>
+      </div>
+      <div class="form-group">
+        <label for="category-type">類型</label>
+        <select id="category-type" x-model="$store.app.category.form.type">
+          <option value="expense">支出</option><option value="income">收入</option>
+        </select>
+        <span class="error" x-text="$store.app.category.errors.type"></span>
+      </div>
+      <div class="form-group">
+        <label for="category-icon">圖示代碼</label>
+        <input id="category-icon" x-model="$store.app.category.form.icon" placeholder="cat_other.png">
+      </div>
+      <button type="submit" class="btn-primary">儲存分類</button>
+      <button type="button" x-show="$store.app.category.editTarget" @click="$store.app.deleteManagedCategory()" class="btn-danger">刪除分類</button>
+    </form>
+  </main>
+
+  <!-- Budgets -->
+  <main x-show="$store.app.currentView === 'budgets'">
+    <div class="month-nav">
+      <button @click="$store.app.moveBudgetMonth(-1)" class="btn-icon" aria-label="Previous month">‹</button>
+      <span x-text="$store.app.budget.month"></span>
+      <button @click="$store.app.moveBudgetMonth(1)" class="btn-icon" aria-label="Next month">›</button>
+    </div>
+    <ul class="card-list">
+      <template x-if="$store.app.budget.items.length === 0"><li class="empty-state">本月尚未設定預算</li></template>
+      <template x-for="item in $store.app.budget.items" :key="item.Id">
+        <li class="budget-card" :class="{ over: $store.app.budgetProgress(item).overBudget }" @click="$store.app.openBudgetEdit(item)">
+          <div class="budget-row"><strong x-text="item.CategoryName || '未分類'"></strong><span x-text="$store.app.budgetProgress(item).percent + '%'"></span></div>
+          <div class="progress-track"><span :style="'width:' + $store.app.budgetProgress(item).barPercent + '%' "></span></div>
+          <small x-text="Number(item.SpentAmount).toLocaleString() + ' / ' + Number(item.Amount).toLocaleString()"></small>
+        </li>
+      </template>
+    </ul>
+    <button class="fab" @click="$store.app.openBudgetAdd()">+</button>
+  </main>
+
+  <main x-show="$store.app.currentView === 'budgetForm'">
+    <form @submit.prevent="$store.app.saveBudget()" class="tx-form">
+      <div class="form-group">
+        <label for="budget-category">支出分類</label>
+        <select id="budget-category" x-model="$store.app.budget.form.categoryId" :disabled="$store.app.budget.editTarget">
+          <option value="">選擇分類…</option>
+          <template x-for="cat in $store.app.categories" :key="cat.Id"><option :value="cat.Id" x-text="cat.Name"></option></template>
+        </select>
+        <span class="error" x-text="$store.app.budget.errors.categoryId"></span>
+      </div>
+      <div class="form-group">
+        <label for="budget-amount">每月預算</label>
+        <input id="budget-amount" type="number" inputmode="decimal" step="0.01" min="0" x-model="$store.app.budget.form.amount">
+        <span class="error" x-text="$store.app.budget.errors.amount"></span>
+      </div>
+      <button type="submit" class="btn-primary">儲存預算</button>
+      <button type="button" x-show="$store.app.budget.editTarget" @click="$store.app.deleteBudget()" class="btn-danger">刪除預算</button>
+    </form>
+  </main>
 
   <!-- Transaction List View -->
   <main x-show="$store.app.currentView === 'transactions'">
@@ -315,17 +451,12 @@
   </main>
 
   <!-- Bottom tab bar -->
-  <nav class="tab-bar" x-show="['transactions','trends'].includes($store.app.currentView)">
-    <button :class="{ active: $store.app.currentView === 'transactions' }"
-            @click="$store.app.currentView = 'transactions'">
-      <span class="tab-icon">📒</span>
-      <span class="tab-label">Transactions</span>
-    </button>
-    <button :class="{ active: $store.app.currentView === 'trends' }"
-            @click="$store.app.currentView = 'trends'; $store.app.loadSnapshots()">
-      <span class="tab-icon">📈</span>
-      <span class="tab-label">Trends</span>
-    </button>
+  <nav class="tab-bar" x-show="$store.app.isPrimaryView()">
+    <button :class="{ active: $store.app.currentView === 'home' }" @click="$store.app.navigate('home')"><span class="tab-icon">🏠</span><span class="tab-label">總覽</span></button>
+    <button :class="{ active: $store.app.currentView === 'transactions' }" @click="$store.app.navigate('transactions')"><span class="tab-icon">📒</span><span class="tab-label">交易</span></button>
+    <button :class="{ active: $store.app.currentView === 'statistics' }" @click="$store.app.navigate('statistics')"><span class="tab-icon">📊</span><span class="tab-label">統計</span></button>
+    <button :class="{ active: $store.app.currentView === 'categoryReport' }" @click="$store.app.navigate('categoryReport')"><span class="tab-icon">🍩</span><span class="tab-label">分類</span></button>
+    <button :class="{ active: $store.app.currentView === 'more' }" @click="$store.app.navigate('more')"><span class="tab-icon">•••</span><span class="tab-label">更多</span></button>
   </nav>
 
   <!-- Toast -->
@@ -338,6 +469,8 @@
   <script src="./vendor/sql-wasm.js"></script>
   <script src="./vendor/chart.umd.min.js"></script>
   <script src="./vendor/alpine.min.js" defer></script>
+  <script src="./accounting.js"></script>
+  <script src="./app-state.js"></script>
   <script src="./db.js"></script>
   <script src="./drive.js"></script>
   <script src="./app.js"></script>

@@ -8,14 +8,14 @@
 ## 2. Shell and Home
 
 - [x] 2.1 Add modular date-window, money-summary, ranking, and chart-axis helpers with unit tests
-- [ ] 2.2 Replace the two-tab shell with five primary destinations and a More hub
-- [ ] 2.3 Implement the month-scoped Home summary and recent activity view
+- [x] 2.2 Replace the two-tab shell with five primary destinations and a More hub
+- [x] 2.3 Implement the month-scoped Home summary and recent activity view
 
 ## 3. Categories and Budgets
 
-- [ ] 3.1 Implement category filtering, creation, editing, duplicate validation, and guarded deletion
-- [ ] 3.2 Implement independent budget month navigation and per-category budget upsert/delete
-- [ ] 3.3 Display budget spending progress and over-budget states from matching expense transactions
+- [x] 3.1 Implement category filtering, creation, editing, duplicate validation, and guarded deletion
+- [x] 3.2 Implement independent budget month navigation and per-category budget upsert/delete
+- [x] 3.3 Display budget spending progress and over-budget states from matching expense transactions
 
 ## 4. Reports and Statistics
 

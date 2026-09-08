@@ -1,8 +1,10 @@
-const CACHE = 'accounting-v4';
+const CACHE = 'accounting-v5';
 const PRECACHE = [
   './',
   './index.html',
   './app.js',
+  './app-state.js',
+  './accounting.js',
   './db.js',
   './drive.js',
   './css/app.css',

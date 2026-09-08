@@ -7,14 +7,14 @@ function currentMonth() {
 let _chart = null;
 
 document.addEventListener('alpine:init', () => {
+  const initialState = AppState.createInitialState();
   Alpine.store('app', {
-    currentView: 'transactions',
+    ...initialState,
     transactions: [],
     categories: [],
     editTarget: null,
-    filter: { type: 'all', month: currentMonth() },
+    formReturnView: 'transactions',
     toast: { message: '', visible: false, _timer: null },
-    loading: false,
     driveStatus: 'disconnected', // 'disconnected' | 'connected' | 'syncing'
     setup: { clientId: '', clientSecret: '' },
     form: { amount: '', currency: 'TWD', categoryId: '', date: '', note: '', type: 'expense' },
@@ -31,6 +31,38 @@ document.addEventListener('alpine:init', () => {
       property: '',
     },
     snapshotErrors: {},
+
+    viewTitle() {
+      const editing = this.currentView === 'form' ? Boolean(this.editTarget)
+        : this.currentView === 'categoryForm' ? Boolean(this.category.editTarget)
+          : this.currentView === 'budgetForm' ? Boolean(this.budget.editTarget)
+            : this.currentView === 'snapshotForm' ? Boolean(this.snapshotEditTarget)
+              : false;
+      return AppState.viewTitle(this.currentView, {
+        editing,
+      });
+    },
+
+    isPrimaryView() {
+      return AppState.isPrimaryView(this.currentView);
+    },
+
+    async navigate(view) {
+      this.currentView = view;
+      if (view === 'home') await this.loadHome();
+      else if (view === 'transactions') await this.loadTransactions();
+      else if (view === 'categories') await this.loadManagedCategories();
+      else if (view === 'budgets') await this.loadBudgets();
+      else if (view === 'trends') this.loadSnapshots();
+    },
+
+    async goBack() {
+      if (this.currentView === 'form') {
+        await this.navigate(this.formReturnView);
+        return;
+      }
+      await this.navigate(AppState.backView(this.currentView));
+    },
 
     async init() {
       // Handle OAuth callback
@@ -51,7 +83,10 @@ document.addEventListener('alpine:init', () => {
         this.loading = true;
         await DB.initDB();
         this.driveStatus = Drive.isAuthenticated() ? 'connected' : 'disconnected';
+        await this.loadHome();
         await this.loadTransactions();
+        await this.loadManagedCategories();
+        await this.loadBudgets();
         this.loadSnapshots();
       } catch (e) {
         document.getElementById('fatal-error').style.display = 'flex';
@@ -62,7 +97,123 @@ document.addEventListener('alpine:init', () => {
 
     async loadTransactions() {
       this.categories = DB.getCategories(this.form.type || 'expense');
-      this.transactions = DB.getTransactions(this.filter.month, this.filter.type);
+      this.transactions = DB.getTransactions(this.filter);
+    },
+
+    async loadHome() {
+      const summary = DB.getMonthlySummary(this.home.month);
+      this.home.summary = {
+        income: Number(summary.Income || 0),
+        expense: Number(summary.Expense || 0),
+        balance: Number(summary.Income || 0) - Number(summary.Expense || 0),
+      };
+      this.home.recent = DB.getRecentTransactions(this.home.month, 10);
+    },
+
+    async moveHomeMonth(delta) {
+      this.home.month = Accounting.moveMonth(this.home.month, delta);
+      await this.loadHome();
+    },
+
+    async loadManagedCategories() {
+      this.category.items = DB.getCategories(this.category.type);
+    },
+
+    async setCategoryType(type) {
+      this.category.type = type;
+      await this.loadManagedCategories();
+    },
+
+    openCategoryAdd() {
+      this.category.editTarget = null;
+      this.category.form = { name: '', icon: 'cat_other.png', type: this.category.type };
+      this.category.errors = {};
+      this.currentView = 'categoryForm';
+    },
+
+    openCategoryEdit(item) {
+      this.category.editTarget = item;
+      this.category.form = { name: item.Name, icon: item.Icon || 'cat_other.png', type: item.Type };
+      this.category.errors = {};
+      this.currentView = 'categoryForm';
+    },
+
+    async saveCategory() {
+      this.category.errors = AppState.validateCategoryForm(this.category.form);
+      if (Object.keys(this.category.errors).length) return;
+      try {
+        if (this.category.editTarget) await DB.updateCategory(this.category.editTarget.Id, this.category.form);
+        else await DB.addCategory(this.category.form);
+        this.category.type = this.category.form.type;
+        await this.loadManagedCategories();
+        await this.loadTransactions();
+        this.currentView = 'categories';
+      } catch (error) {
+        this.category.errors.name = error.message;
+      }
+    },
+
+    async deleteManagedCategory(item = this.category.editTarget) {
+      if (!item || !confirm(`刪除分類「${item.Name}」？`)) return;
+      try {
+        await DB.deleteCategory(item.Id);
+        await this.loadManagedCategories();
+        this.currentView = 'categories';
+      } catch (error) {
+        this.showToast(error.message);
+      }
+    },
+
+    async loadBudgets() {
+      this.budget.items = DB.getBudgetsWithSpending(this.budget.month);
+    },
+
+    async moveBudgetMonth(delta) {
+      this.budget.month = Accounting.moveMonth(this.budget.month, delta);
+      await this.loadBudgets();
+    },
+
+    openBudgetAdd() {
+      this.budget.editTarget = null;
+      this.budget.form = { categoryId: '', amount: '' };
+      this.budget.errors = {};
+      this.categories = DB.getCategories('expense');
+      this.currentView = 'budgetForm';
+    },
+
+    openBudgetEdit(item) {
+      this.budget.editTarget = item;
+      this.budget.form = { categoryId: String(item.CategoryId), amount: String(item.Amount) };
+      this.budget.errors = {};
+      this.categories = DB.getCategories('expense');
+      this.currentView = 'budgetForm';
+    },
+
+    async saveBudget() {
+      this.budget.errors = AppState.validateBudgetForm(this.budget.form);
+      if (Object.keys(this.budget.errors).length) return;
+      try {
+        await DB.upsertBudget({
+          categoryId: Number(this.budget.form.categoryId),
+          amount: Number(this.budget.form.amount),
+          month: this.budget.month,
+        });
+        await this.loadBudgets();
+        this.currentView = 'budgets';
+      } catch (error) {
+        this.budget.errors.amount = error.message;
+      }
+    },
+
+    async deleteBudget(item = this.budget.editTarget) {
+      if (!item || !confirm('刪除此預算？')) return;
+      await DB.deleteBudget(item.Id);
+      await this.loadBudgets();
+      this.currentView = 'budgets';
+    },
+
+    budgetProgress(item) {
+      return AppState.budgetProgress(item);
     },
 
     loadSnapshots() {
@@ -282,6 +433,7 @@ document.addEventListener('alpine:init', () => {
 
     openAdd() {
       this.editTarget = null;
+      this.formReturnView = 'transactions';
       this.form = {
         amount: '', currency: 'TWD', categoryId: '',
         date: new Date().toISOString().slice(0, 10),
@@ -293,6 +445,7 @@ document.addEventListener('alpine:init', () => {
     },
 
     openEdit(tx) {
+      this.formReturnView = this.currentView === 'home' ? 'home' : 'transactions';
       this.editTarget = tx;
       this.form = {
         amount: String(tx.Amount), currency: tx.Currency,
@@ -335,15 +488,19 @@ document.addEventListener('alpine:init', () => {
       } else {
         await DB.addTransaction(data);
       }
-      this.currentView = 'transactions';
       await this.loadTransactions();
+      await this.loadHome();
+      await this.loadBudgets();
+      this.currentView = this.formReturnView;
     },
 
     async deleteTransaction() {
       if (!confirm('Delete this transaction?')) return;
       await DB.deleteTransaction(this.editTarget.Id);
-      this.currentView = 'transactions';
       await this.loadTransactions();
+      await this.loadHome();
+      await this.loadBudgets();
+      this.currentView = this.formReturnView;
     },
 
     async backupToDrive() {
@@ -371,7 +528,10 @@ document.addEventListener('alpine:init', () => {
         this.driveStatus = 'syncing';
         const bytes = await Drive.restore();
         await DB.loadFromBytes(bytes);
+        await this.loadHome();
         await this.loadTransactions();
+        await this.loadManagedCategories();
+        await this.loadBudgets();
         this.loadSnapshots();
         this.showToast('Restore complete');
         this.driveStatus = 'connected';
@@ -424,6 +584,16 @@ document.addEventListener('alpine:init', () => {
     },
 
     iconDisplay(icon) {
+      const icons = {
+        'cat_food.png': '🍽️',
+        'cat_transport.png': '🚗',
+        'cat_fun.png': '🎮',
+        'cat_shopping.png': '🛍️',
+        'cat_medical.png': '🏥',
+        'cat_salary.png': '💼',
+        'cat_other.png': '💰',
+      };
+      if (icons[icon]) return icons[icon];
       if (!icon || icon.includes('.')) return '💰';
       return icon;
     },
